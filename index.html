@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>教室時鐘</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Noto+Sans+TC:wght@300;400&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0e1a;
+      --panel: #111827;
+      --border: #1e3a5f;
+      --accent: #00d4ff;
+      --accent2: #ff6b35;
+      --text: #e2e8f0;
+      --dim: #64748b;
+      --glow: 0 0 24px rgba(0,212,255,0.5);
+      --glow2: 0 0 20px rgba(255,107,53,0.5);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans TC', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      animation: gridMove 20s linear infinite;
+      pointer-events: none;
+    }
+    @keyframes gridMove { to { background-position: 40px 40px; } }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      padding: 32px 16px;
+      width: min(800px, 96vw);
+    }
+
+    /* DATE */
+    .date-line {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(0.7rem, 2vw, 1rem);
+      color: var(--dim);
+      letter-spacing: 0.2em;
+    }
+
+    /* DIGITAL CLOCK — 每個數字放固定尺寸方塊，完全不跳動 */
+    .digital {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4vw;
+      width: 100%;
+    }
+    /* 固定寬高的數字卡片，字放中間 */
+    .d {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: clamp(2.8rem, 13.5vw, 9rem);
+      height: clamp(3.6rem, 17vw, 11.5rem);
+      font-family: 'Orbitron', monospace;
+      font-weight: 900;
+      font-size: clamp(2.6rem, 12.5vw, 8.5rem);
+      color: var(--accent);
+      text-shadow: var(--glow);
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .colon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: clamp(1rem, 4vw, 2.8rem);
+      height: clamp(3.6rem, 17vw, 11.5rem);
+      font-family: 'Orbitron', monospace;
+      font-weight: 900;
+      font-size: clamp(2rem, 9vw, 6rem);
+      color: var(--accent);
+      text-shadow: var(--glow);
+      animation: blink 1s step-end infinite;
+      flex-shrink: 0;
+      padding-bottom: 0.1em;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.15} }
+
+    .weekday {
+      font-size: clamp(0.8rem, 2.5vw, 1.1rem);
+      color: var(--dim);
+      letter-spacing: 0.2em;
+    }
+
+    /* DIVIDER */
+    .divider {
+      width: 100%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), var(--accent), var(--border), transparent);
+    }
+
+    /* EXAM PANEL */
+    .exam-panel {
+      width: 100%;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .exam-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .exam-title {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(0.75rem, 2vw, 0.95rem);
+      color: var(--accent);
+      letter-spacing: 0.15em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .exam-title::before {
+      content: '';
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: var(--glow);
+    }
+
+    .toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+      color: var(--dim);
+      cursor: pointer;
+      user-select: none;
+    }
+    .toggle { position: relative; width: 48px; height: 26px; }
+    .toggle input { display: none; }
+    .toggle-track {
+      position: absolute; inset: 0;
+      background: #1e293b;
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      transition: background .3s, border-color .3s;
+    }
+    .toggle-thumb {
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: var(--dim);
+      transition: transform .3s, background .3s, box-shadow .3s;
+    }
+    .toggle input:checked ~ .toggle-track { background: #0a2a3a; border-color: var(--accent); }
+    .toggle input:checked ~ .toggle-thumb {
+      transform: translateX(22px);
+      background: var(--accent);
+      box-shadow: var(--glow);
+    }
+
+    .period-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .period-label { font-size: 0.85rem; color: var(--dim); white-space: nowrap; }
+    .period-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+    .pb {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.75rem;
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--dim);
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .pb:hover { border-color: var(--accent); color: var(--accent); }
+    .pb.active { border-color: var(--accent2); color: var(--accent2); background: rgba(255,107,53,0.08); box-shadow: var(--glow2); }
+
+    .countdown-box {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px;
+      background: rgba(255,107,53,0.05);
+      border: 1px solid rgba(255,107,53,0.2);
+      border-radius: 10px;
+    }
+    .countdown-box.visible { display: flex; }
+
+    .countdown-label { font-size: 0.8rem; color: var(--accent2); letter-spacing: 0.15em; }
+
+    .countdown-time {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(2.5rem, 12vw, 6rem);
+      font-weight: 900;
+      color: var(--accent2);
+      text-shadow: var(--glow2);
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+    }
+    .countdown-time.urgent {
+      color: #ff3b3b;
+      text-shadow: 0 0 20px rgba(255,59,59,0.6);
+      animation: pulse 0.5s ease-in-out infinite alternate;
+    }
+    @keyframes pulse { to { opacity: 0.55; } }
+
+    .countdown-bar-wrap {
+      width: 100%; height: 5px;
+      background: rgba(255,107,53,0.15);
+      border-radius: 99px; overflow: hidden;
+    }
+    .countdown-bar {
+      height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg, var(--accent2), #ff3b3b);
+      transition: width 1s linear;
+    }
+    .period-info { font-size: 0.78rem; color: var(--dim); }
+
+    .status-off {
+      text-align: center; color: var(--dim);
+      font-size: 0.82rem; padding: 8px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="date-line" id="dateLine"></div>
+
+  <!-- DIGITAL CLOCK: 每位數字獨立 span，固定 1ch，永不跳動 -->
+  <div class="digital">
+    <span class="d" id="h0">0</span><span class="d" id="h1">0</span>
+    <span class="colon">:</span>
+    <span class="d" id="m0">0</span><span class="d" id="m1">0</span>
+    <span class="colon">:</span>
+    <span class="d" id="s0">0</span><span class="d" id="s1">0</span>
+  </div>
+
+  <div class="weekday" id="weekday"></div>
+
+  <div class="divider"></div>
+
+  <div class="exam-panel">
+    <div class="exam-header">
+      <div class="exam-title">考試剩餘時間</div>
+      <label class="toggle-wrap">
+        <div class="toggle">
+          <input type="checkbox" id="examToggle" />
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </div>
+        開啟
+      </label>
+    </div>
+
+    <div id="examControls" style="display:none; flex-direction:column; gap:12px;">
+      <div class="period-row">
+        <span class="period-label">選擇節次：</span>
+        <div class="period-btns" id="periodBtns"></div>
+      </div>
+      <div class="countdown-box" id="countdownBox">
+        <div class="countdown-label" id="countdownLabel">第 1 節剩餘</div>
+        <div class="countdown-time" id="countdownTime">--:--</div>
+        <div class="countdown-bar-wrap"><div class="countdown-bar" id="countdownBar" style="width:100%"></div></div>
+        <div class="period-info" id="periodInfo"></div>
+      </div>
+    </div>
+
+    <div class="status-off" id="statusOff">開啟開關以顯示考試剩餘時間</div>
+  </div>
+
+</div>
+<script>
+  const PERIODS = [
+    { label:'1', start:[8,10],  end:[9,0]   },
+    { label:'2', start:[9,10],  end:[10,0]  },
+    { label:'3', start:[10,10], end:[11,0]  },
+    { label:'4', start:[11,10], end:[12,0]  },
+    { label:'5', start:[13,5],  end:[13,55] },
+    { label:'6', start:[14,5],  end:[14,55] },
+    { label:'7', start:[15,10], end:[16,0]  },
+  ];
+  const WEEKDAYS = ['日','一','二','三','四','五','六'];
+  const DAYS_EN  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+  let examOn = false, selectedPeriod = null;
+
+  const examToggle   = document.getElementById('examToggle');
+  const examControls = document.getElementById('examControls');
+  const statusOff    = document.getElementById('statusOff');
+  const countdownBox = document.getElementById('countdownBox');
+  const countdownLabel = document.getElementById('countdownLabel');
+  const countdownTime  = document.getElementById('countdownTime');
+  const countdownBar   = document.getElementById('countdownBar');
+  const periodInfo     = document.getElementById('periodInfo');
+
+  PERIODS.forEach((p, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'pb';
+    btn.textContent = `第${p.label}節`;
+    btn.addEventListener('click', () => {
+      selectedPeriod = i;
+      document.querySelectorAll('.pb').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      countdownBox.classList.add('visible');
+    });
+    document.getElementById('periodBtns').appendChild(btn);
+  });
+
+  examToggle.addEventListener('change', () => {
+    examOn = examToggle.checked;
+    examControls.style.display = examOn ? 'flex' : 'none';
+    statusOff.style.display    = examOn ? 'none'  : 'block';
+    if (!examOn) {
+      selectedPeriod = null;
+      countdownBox.classList.remove('visible');
+      document.querySelectorAll('.pb').forEach(b => b.classList.remove('active'));
+    }
+  });
+
+  function pad(n){ return String(n).padStart(2,'0'); }
+
+  function updateCountdown(now) {
+    if (!examOn || selectedPeriod === null) return;
+    const p = PERIODS[selectedPeriod];
+    const endSec   = p.end[0]*3600   + p.end[1]*60;
+    const startSec = p.start[0]*3600 + p.start[1]*60;
+    const nowSec   = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+    const remaining = endSec - nowSec;
+    const total     = endSec - startSec;
+
+    countdownLabel.textContent = `第 ${p.label} 節剩餘`;
+
+    if (remaining <= 0) {
+      countdownTime.textContent = '已結束';
+      countdownTime.classList.remove('urgent');
+      countdownBar.style.width = '0%';
+      periodInfo.textContent = '';
+    } else {
+      countdownTime.textContent = `${pad(Math.floor(remaining/60))}:${pad(remaining%60)}`;
+      countdownTime.classList.toggle('urgent', remaining <= 300);
+      countdownBar.style.width = Math.min(100, remaining/total*100) + '%';
+      periodInfo.textContent = `${pad(p.start[0])}:${pad(p.start[1])} ～ ${pad(p.end[0])}:${pad(p.end[1])}`;
+    }
+  }
+
+  function tick() {
+    const now = new Date();
+    document.getElementById('h0').textContent = pad(now.getHours())[0];
+    document.getElementById('h1').textContent = pad(now.getHours())[1];
+    document.getElementById('m0').textContent = pad(now.getMinutes())[0];
+    document.getElementById('m1').textContent = pad(now.getMinutes())[1];
+    document.getElementById('s0').textContent = pad(now.getSeconds())[0];
+    document.getElementById('s1').textContent = pad(now.getSeconds())[1];
+    document.getElementById('dateLine').textContent =
+      `${now.getFullYear()} · ${pad(now.getMonth()+1)} · ${pad(now.getDate())}`;
+    document.getElementById('weekday').textContent =
+      `星期${WEEKDAYS[now.getDay()]}  ·  ${DAYS_EN[now.getDay()]}`;
+    updateCountdown(now);
+  }
+
+  tick();
+  setInterval(tick, 1000);
+</script>
+</body>
+</html>

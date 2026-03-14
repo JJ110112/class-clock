@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>教室時鐘</title>
+  <title>教室時鐘 - 螢光綠版</title>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Noto+Sans+TC:wght@300;400&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -12,12 +12,13 @@
       --bg: #0a0e1a;
       --panel: #111827;
       --border: #1e3a5f;
-      --accent: #00d4ff;
-      --accent2: #ff6b35;
+      /* 改為螢光綠色 */
+      --accent: #39ff14; 
+      --accent2: #ccff00; /* 次要色改為黃綠色 */
       --text: #e2e8f0;
       --dim: #64748b;
-      --glow: 0 0 24px rgba(0,212,255,0.5);
-      --glow2: 0 0 20px rgba(255,107,53,0.5);
+      --glow: 0 0 24px rgba(57, 255, 20, 0.5);
+      --glow2: 0 0 20px rgba(204, 255, 0, 0.4);
     }
 
     body {
@@ -35,9 +36,10 @@
       content: '';
       position: fixed;
       inset: 0;
+      /* 背景網格也同步改為淡淡的綠色 */
       background-image:
-        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+        linear-gradient(rgba(57, 255, 20, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(57, 255, 20, 0.03) 1px, transparent 1px);
       background-size: 40px 40px;
       animation: gridMove 20s linear infinite;
       pointer-events: none;
@@ -55,7 +57,6 @@
       width: min(800px, 96vw);
     }
 
-    /* DATE */
     .date-line {
       font-family: 'Orbitron', monospace;
       font-size: clamp(0.7rem, 2vw, 1rem);
@@ -63,7 +64,6 @@
       letter-spacing: 0.2em;
     }
 
-    /* DIGITAL CLOCK — 每個數字放固定尺寸方塊，完全不跳動 */
     .digital {
       display: flex;
       align-items: center;
@@ -71,7 +71,6 @@
       gap: 0.4vw;
       width: 100%;
     }
-    /* 固定寬高的數字卡片，字放中間 */
     .d {
       display: inline-flex;
       align-items: center;
@@ -109,14 +108,12 @@
       letter-spacing: 0.2em;
     }
 
-    /* DIVIDER */
     .divider {
       width: 100%;
       height: 1px;
       background: linear-gradient(90deg, transparent, var(--border), var(--accent), var(--border), transparent);
     }
 
-    /* EXAM PANEL */
     .exam-panel {
       width: 100%;
       background: var(--panel);
@@ -201,7 +198,7 @@
       transition: all .2s;
     }
     .pb:hover { border-color: var(--accent); color: var(--accent); }
-    .pb.active { border-color: var(--accent2); color: var(--accent2); background: rgba(255,107,53,0.08); box-shadow: var(--glow2); }
+    .pb.active { border-color: var(--accent2); color: var(--accent2); background: rgba(204, 255, 0, 0.08); box-shadow: var(--glow2); }
 
     .countdown-box {
       display: none;
@@ -209,8 +206,8 @@
       align-items: center;
       gap: 8px;
       padding: 16px;
-      background: rgba(255,107,53,0.05);
-      border: 1px solid rgba(255,107,53,0.2);
+      background: rgba(204, 255, 0, 0.05);
+      border: 1px solid rgba(204, 255, 0, 0.2);
       border-radius: 10px;
     }
     .countdown-box.visible { display: flex; }
@@ -235,12 +232,12 @@
 
     .countdown-bar-wrap {
       width: 100%; height: 5px;
-      background: rgba(255,107,53,0.15);
+      background: rgba(204, 255, 0, 0.15);
       border-radius: 99px; overflow: hidden;
     }
     .countdown-bar {
       height: 100%; border-radius: 99px;
-      background: linear-gradient(90deg, var(--accent2), #ff3b3b);
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
       transition: width 1s linear;
     }
     .period-info { font-size: 0.78rem; color: var(--dim); }
@@ -253,10 +250,7 @@
 </head>
 <body>
 <div class="container">
-
   <div class="date-line" id="dateLine"></div>
-
-  <!-- DIGITAL CLOCK: 每位數字獨立 span，固定 1ch，永不跳動 -->
   <div class="digital">
     <span class="d" id="h0">0</span><span class="d" id="h1">0</span>
     <span class="colon">:</span>
@@ -264,11 +258,8 @@
     <span class="colon">:</span>
     <span class="d" id="s0">0</span><span class="d" id="s1">0</span>
   </div>
-
   <div class="weekday" id="weekday"></div>
-
   <div class="divider"></div>
-
   <div class="exam-panel">
     <div class="exam-header">
       <div class="exam-title">考試剩餘時間</div>
@@ -281,7 +272,6 @@
         開啟
       </label>
     </div>
-
     <div id="examControls" style="display:none; flex-direction:column; gap:12px;">
       <div class="period-row">
         <span class="period-label">選擇節次：</span>
@@ -294,10 +284,8 @@
         <div class="period-info" id="periodInfo"></div>
       </div>
     </div>
-
     <div class="status-off" id="statusOff">開啟開關以顯示考試剩餘時間</div>
   </div>
-
 </div>
 <script>
   const PERIODS = [

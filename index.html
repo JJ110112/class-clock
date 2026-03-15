@@ -230,7 +230,7 @@
 
     .countdown-label { font-size: 0.8rem; color: var(--accent2); letter-spacing: 0.15em; }
 
-    /* 倒數時間：固定寬高方塊，與主時鐘相同手法 */
+    /* 倒數時間：每格固定 em 寬，完全不跳動 */
     .countdown-time {
       display: flex;
       align-items: center;
@@ -239,26 +239,27 @@
       font-weight: 900;
       font-size: clamp(2.5rem, 12vw, 6rem);
       line-height: 1;
+      /* 總寬固定 = 4格×0.8em + 冒號×0.5em = 3.7em，永不改變 */
+      width: 3.7em;
+      flex-shrink: 0;
     }
     .cd {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: clamp(1.6rem, 7.5vw, 4rem);
-      height: clamp(2rem, 9vw, 5rem);
+      width: 0.8em;   /* 固定 em，比最寬字「0」略寬，不受字形影響 */
+      flex-shrink: 0;
       color: var(--accent2);
       text-shadow: var(--glow2);
-      flex-shrink: 0;
     }
     .cd-colon {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: clamp(0.6rem, 2.5vw, 1.4rem);
-      height: clamp(2rem, 9vw, 5rem);
+      width: 0.5em;
+      flex-shrink: 0;
       color: var(--accent2);
       text-shadow: var(--glow2);
-      flex-shrink: 0;
       padding-bottom: 0.1em;
     }
     .countdown-time.urgent .cd,

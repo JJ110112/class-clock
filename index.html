@@ -14,10 +14,13 @@
       --border: #1e3a5f;
       --accent: #00d4ff;
       --accent2: #ff6b35;
+      --green: #00ff9d;
+      --purple: #a78bfa;
       --text: #e2e8f0;
       --dim: #64748b;
       --glow: 0 0 24px rgba(0,212,255,0.5);
       --glow2: 0 0 20px rgba(255,107,53,0.5);
+      --glowP: 0 0 18px rgba(167,139,250,0.5);
     }
 
     body {
@@ -55,15 +58,44 @@
       width: min(800px, 96vw);
     }
 
-    /* DATE */
+    /* ── MODE SWITCHER ── */
+    .mode-switcher {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .mode-btn {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(0.65rem, 1.8vw, 0.82rem);
+      padding: 9px 24px;
+      border: none;
+      background: transparent;
+      color: var(--dim);
+      cursor: pointer;
+      letter-spacing: 0.12em;
+      transition: all .25s;
+    }
+    .mode-btn.active[data-mode="monthly"] {
+      color: var(--accent);
+      background: rgba(0,212,255,0.08);
+      text-shadow: 0 0 10px rgba(0,212,255,0.4);
+    }
+    .mode-btn.active[data-mode="mock"] {
+      color: var(--purple);
+      background: rgba(167,139,250,0.08);
+      text-shadow: 0 0 10px rgba(167,139,250,0.4);
+    }
+    .mode-divider { width:1px; background:var(--border); }
+
+    /* ── DATE / CLOCK ── */
     .date-line {
       font-family: 'Orbitron', monospace;
       font-size: clamp(0.7rem, 2vw, 1rem);
       color: var(--dim);
       letter-spacing: 0.2em;
     }
-
-    /* DIGITAL CLOCK — 每個數字放固定尺寸方塊，完全不跳動 */
     .digital {
       display: flex;
       align-items: center;
@@ -71,7 +103,6 @@
       gap: 0.4vw;
       width: 100%;
     }
-    /* 固定寬高的數字卡片，字放中間 */
     .d {
       display: inline-flex;
       align-items: center;
@@ -102,21 +133,14 @@
       padding-bottom: 0.1em;
     }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.15} }
+    .weekday { font-size: clamp(0.8rem, 2.5vw, 1.1rem); color: var(--dim); letter-spacing: 0.2em; }
 
-    .weekday {
-      font-size: clamp(0.8rem, 2.5vw, 1.1rem);
-      color: var(--dim);
-      letter-spacing: 0.2em;
-    }
-
-    /* DIVIDER */
     .divider {
-      width: 100%;
-      height: 1px;
+      width: 100%; height: 1px;
       background: linear-gradient(90deg, transparent, var(--border), var(--accent), var(--border), transparent);
     }
 
-    /* EXAM PANEL */
+    /* ── PANEL ── */
     .exam-panel {
       width: 100%;
       background: var(--panel);
@@ -127,7 +151,6 @@
       flex-direction: column;
       gap: 14px;
     }
-
     .exam-header {
       display: flex;
       align-items: center;
@@ -135,7 +158,6 @@
       flex-wrap: wrap;
       gap: 12px;
     }
-
     .exam-title {
       font-family: 'Orbitron', monospace;
       font-size: clamp(0.75rem, 2vw, 0.95rem);
@@ -149,18 +171,16 @@
       content: '';
       width: 8px; height: 8px;
       border-radius: 50%;
-      background: var(--accent);
-      box-shadow: var(--glow);
+      background: currentColor;
+      box-shadow: 0 0 10px currentColor;
     }
+    .exam-title.mock { color: var(--purple); }
 
+    /* toggle */
     .toggle-wrap {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 0.85rem;
-      color: var(--dim);
-      cursor: pointer;
-      user-select: none;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.85rem; color: var(--dim);
+      cursor: pointer; user-select: none;
     }
     .toggle { position: relative; width: 48px; height: 26px; }
     .toggle input { display: none; }
@@ -172,27 +192,23 @@
       transition: background .3s, border-color .3s;
     }
     .toggle-thumb {
-      position: absolute;
-      top: 3px; left: 3px;
-      width: 18px; height: 18px;
-      border-radius: 50%;
+      position: absolute; top: 3px; left: 3px;
+      width: 18px; height: 18px; border-radius: 50%;
       background: var(--dim);
       transition: transform .3s, background .3s, box-shadow .3s;
     }
-    .toggle input:checked ~ .toggle-track { background: #0a2a3a; border-color: var(--accent); }
-    .toggle input:checked ~ .toggle-thumb {
-      transform: translateX(22px);
-      background: var(--accent);
-      box-shadow: var(--glow);
-    }
+    /* monthly toggle */
+    #examToggle:checked ~ .toggle-track { background:#0a2a3a; border-color:var(--accent); }
+    #examToggle:checked ~ .toggle-thumb { transform:translateX(22px); background:var(--accent); box-shadow:var(--glow); }
+    /* mock toggle */
+    #mockToggle:checked ~ .toggle-track { background:#130e24; border-color:var(--purple); }
+    #mockToggle:checked ~ .toggle-thumb { transform:translateX(22px); background:var(--purple); box-shadow:var(--glowP); }
 
-    .period-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .period-label { font-size: 0.85rem; color: var(--dim); white-space: nowrap; }
-    .period-btns { display: flex; gap: 6px; flex-wrap: wrap; }
-    .pb {
+    /* small pill buttons */
+    .pb, .db {
       font-family: 'Orbitron', monospace;
       font-size: 0.75rem;
-      padding: 5px 10px;
+      padding: 5px 11px;
       border-radius: 6px;
       border: 1px solid var(--border);
       background: transparent;
@@ -201,36 +217,41 @@
       transition: all .2s;
     }
     .pb:hover { border-color: var(--accent); color: var(--accent); }
-    .pb.active { border-color: var(--accent2); color: var(--accent2); background: rgba(255,107,53,0.08); box-shadow: var(--glow2); }
-    .db {
-      font-family: 'Orbitron', monospace;
-      font-size: 0.75rem;
-      padding: 5px 12px;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--dim);
-      cursor: pointer;
-      transition: all .2s;
-    }
+    .pb.active-blue { border-color:var(--accent2); color:var(--accent2); background:rgba(255,107,53,0.08); box-shadow:var(--glow2); }
+    .pb.active-purple { border-color:var(--purple); color:var(--purple); background:rgba(167,139,250,0.08); }
     .db:hover { border-color: var(--green); color: var(--green); }
-    .db.active { border-color: var(--green); color: var(--green); background: rgba(0,255,157,0.08); box-shadow: 0 0 14px rgba(0,255,157,0.3); }
+    .db.active { border-color:var(--green); color:var(--green); background:rgba(0,255,157,0.08); box-shadow:0 0 14px rgba(0,255,157,0.3); }
 
+    /* period row */
+    .period-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .period-label { font-size:0.85rem; color:var(--dim); white-space:nowrap; }
+    .period-btns { display:flex; gap:6px; flex-wrap:wrap; }
+
+    /* ── COUNTDOWN BOX ── */
     .countdown-box {
       display: none;
       flex-direction: column;
       align-items: center;
       gap: 8px;
       padding: 16px;
-      background: rgba(255,107,53,0.05);
-      border: 1px solid rgba(255,107,53,0.2);
       border-radius: 10px;
     }
     .countdown-box.visible { display: flex; }
+    /* monthly */
+    .countdown-box.monthly-box {
+      background: rgba(255,107,53,0.05);
+      border: 1px solid rgba(255,107,53,0.2);
+    }
+    /* mock */
+    .countdown-box.mock-box {
+      background: rgba(167,139,250,0.05);
+      border: 1px solid rgba(167,139,250,0.2);
+    }
 
-    .countdown-label { font-size: 0.8rem; color: var(--accent2); letter-spacing: 0.15em; }
+    .countdown-label { font-size:0.8rem; letter-spacing:0.15em; }
+    .monthly-box .countdown-label { color: var(--accent2); }
+    .mock-box    .countdown-label { color: var(--purple); }
 
-    /* 倒數時間：每格固定 em 寬，完全不跳動 */
     .countdown-time {
       display: flex;
       align-items: center;
@@ -239,71 +260,83 @@
       font-weight: 900;
       font-size: clamp(2.5rem, 12vw, 6rem);
       line-height: 1;
-      /* 總寬固定 = 4格×0.8em + 冒號×0.5em = 3.7em，永不改變 */
       width: 3.7em;
       flex-shrink: 0;
     }
     .cd {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 0.8em;   /* 固定 em，比最寬字「0」略寬，不受字形影響 */
-      flex-shrink: 0;
-      color: var(--accent2);
-      text-shadow: var(--glow2);
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 0.8em; flex-shrink: 0;
     }
     .cd-colon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 0.5em;
-      flex-shrink: 0;
-      color: var(--accent2);
-      text-shadow: var(--glow2);
-      padding-bottom: 0.1em;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 0.5em; flex-shrink: 0; padding-bottom: 0.1em;
     }
+    .monthly-box .cd, .monthly-box .cd-colon { color:var(--accent2); text-shadow:var(--glow2); }
+    .mock-box    .cd, .mock-box    .cd-colon { color:var(--purple);  text-shadow:var(--glowP); }
+
     .countdown-time.urgent .cd,
     .countdown-time.urgent .cd-colon {
-      color: #ff3b3b;
-      text-shadow: 0 0 20px rgba(255,59,59,0.6);
+      color: #ff3b3b !important;
+      text-shadow: 0 0 20px rgba(255,59,59,0.6) !important;
     }
+    .countdown-time.urgent { animation: pulse 0.5s ease-in-out infinite alternate; }
+    @keyframes pulse { to { opacity: 0.55; } }
+
     .break-msg {
       font-family: 'Orbitron', monospace;
       font-weight: 900;
       font-size: clamp(2.5rem, 12vw, 6rem);
-      color: var(--accent2);
-      text-shadow: var(--glow2);
       letter-spacing: 0.1em;
     }
-    .countdown-time.urgent {
-      animation: pulse 0.5s ease-in-out infinite alternate;
-    }
-    @keyframes pulse { to { opacity: 0.55; } }
+    .monthly-box .break-msg { color:var(--accent2); text-shadow:var(--glow2); }
+    .mock-box    .break-msg { color:var(--purple);  text-shadow:var(--glowP); }
 
-    .countdown-bar-wrap {
-      width: 100%; height: 5px;
-      background: rgba(255,107,53,0.15);
-      border-radius: 99px; overflow: hidden;
-    }
-    .countdown-bar {
-      height: 100%; border-radius: 99px;
-      background: linear-gradient(90deg, var(--accent2), #ff3b3b);
-      transition: width 1s linear;
-    }
-    .period-info { font-size: 0.78rem; color: var(--dim); }
+    .countdown-bar-wrap { width:100%; height:5px; border-radius:99px; overflow:hidden; }
+    .monthly-box .countdown-bar-wrap { background:rgba(255,107,53,0.15); }
+    .mock-box    .countdown-bar-wrap { background:rgba(167,139,250,0.15); }
 
-    .status-off {
-      text-align: center; color: var(--dim);
-      font-size: 0.82rem; padding: 8px;
+    .countdown-bar { height:100%; border-radius:99px; transition:width 1s linear; }
+    .monthly-box .countdown-bar { background:linear-gradient(90deg, var(--accent2), #ff3b3b); }
+    .mock-box    .countdown-bar { background:linear-gradient(90deg, var(--purple), #7c3aed); }
+
+    .period-info { font-size:0.78rem; color:var(--dim); }
+
+    .status-off { text-align:center; color:var(--dim); font-size:0.82rem; padding:8px; }
+
+    /* ── 模擬考科目 badge ── */
+    .subject-badge {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 5px 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(167,139,250,0.3);
+      background: rgba(167,139,250,0.07);
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(0.75rem, 2vw, 0.88rem);
+      color: var(--purple);
+      letter-spacing: 0.1em;
+    }
+    .subject-badge.visible { display: flex; }
+    .subject-dot {
+      width:7px; height:7px; border-radius:50%;
+      background:var(--purple); box-shadow:var(--glowP); flex-shrink:0;
     }
   </style>
 </head>
 <body>
 <div class="container">
 
+  <!-- MODE SWITCHER -->
+  <div class="mode-switcher">
+    <button class="mode-btn active" data-mode="monthly" id="btnMonthly">月　考</button>
+    <div class="mode-divider"></div>
+    <button class="mode-btn" data-mode="mock" id="btnMock">模擬考</button>
+  </div>
+
   <div class="date-line" id="dateLine"></div>
 
-  <!-- DIGITAL CLOCK: 每位數字獨立 span，固定 1ch，永不跳動 -->
   <div class="digital">
     <span class="d" id="h0">0</span><span class="d" id="h1">0</span>
     <span class="colon">:</span>
@@ -313,10 +346,10 @@
   </div>
 
   <div class="weekday" id="weekday"></div>
-
   <div class="divider"></div>
 
-  <div class="exam-panel">
+  <!-- ══ 月考 PANEL ══ -->
+  <div class="exam-panel" id="panelMonthly">
     <div class="exam-header">
       <div class="exam-title">考試剩餘時間</div>
       <label class="toggle-wrap">
@@ -330,18 +363,18 @@
     </div>
 
     <div id="examControls" style="display:none; flex-direction:column; gap:12px;">
-<div class="period-row">
+      <div class="period-row">
         <span class="period-label">考試時長：</span>
         <div class="period-btns" id="durationBtns"></div>
       </div>
-      <div class="countdown-box" id="countdownBox">
+      <div class="countdown-box monthly-box" id="countdownBox">
         <div class="countdown-label" id="countdownLabel">第 1 節剩餘</div>
         <div class="countdown-time" id="countdownTime">
           <span class="cd" id="cd0">-</span><span class="cd" id="cd1">-</span>
           <span class="cd-colon">:</span>
           <span class="cd" id="cd2">-</span><span class="cd" id="cd3">-</span>
         </div>
-        <div class="break-msg" id="breakMsg" style="display:none;">下課中</div>
+        <div class="break-msg" id="breakMsg" style="display:none;"></div>
         <div class="countdown-bar-wrap"><div class="countdown-bar" id="countdownBar" style="width:100%"></div></div>
         <div class="period-info" id="periodInfo"></div>
       </div>
@@ -350,8 +383,55 @@
     <div class="status-off" id="statusOff">開啟開關以顯示考試剩餘時間</div>
   </div>
 
+  <!-- ══ 模擬考 PANEL ══ -->
+  <div class="exam-panel" id="panelMock" style="display:none;">
+    <div class="exam-header">
+      <div class="exam-title mock">模擬考剩餘時間</div>
+      <label class="toggle-wrap">
+        <div class="toggle">
+          <input type="checkbox" id="mockToggle" />
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </div>
+        開啟
+      </label>
+    </div>
+
+    <!-- 天次選擇 -->
+    <div class="period-row" id="mockDayRow">
+      <span class="period-label">考試天次：</span>
+      <div class="period-btns">
+        <button class="pb active-purple" id="btnDay1">第一天</button>
+        <button class="pb" id="btnDay2">第二天</button>
+      </div>
+    </div>
+
+    <!-- 科目 badge -->
+    <div class="subject-badge" id="subjectBadge">
+      <div class="subject-dot"></div>
+      <span id="subjectName">—</span>
+    </div>
+
+    <div class="countdown-box mock-box" id="mockCountdownBox">
+      <div class="countdown-label" id="mockLabel">剩餘時間</div>
+      <div class="countdown-time" id="mockTime">
+        <span class="cd" id="mcd0">-</span><span class="cd" id="mcd1">-</span>
+        <span class="cd-colon">:</span>
+        <span class="cd" id="mcd2">-</span><span class="cd" id="mcd3">-</span>
+      </div>
+      <div class="break-msg" id="mockBreakMsg" style="display:none;"></div>
+      <div class="countdown-bar-wrap"><div class="countdown-bar" id="mockBar" style="width:100%"></div></div>
+      <div class="period-info" id="mockInfo"></div>
+    </div>
+
+    <div class="status-off" id="mockStatusOff">開啟開關以顯示模擬考剩餘時間</div>
+  </div>
+
 </div>
 <script>
+  // ═══════════════════════════════════
+  //  月考資料
+  // ═══════════════════════════════════
   const PERIODS = [
     { label:'1', start:[8,10]  },
     { label:'2', start:[9,10]  },
@@ -361,44 +441,81 @@
     { label:'6', start:[14,5]  },
     { label:'7', start:[15,10] },
   ];
-  // 各節可用的考試時長（第4節index=3、第7節index=6只能50分）
   const PERIOD_DURATIONS = [
-    [50, 80, 100], // 第1節
-    [50, 80, 100], // 第2節
-    [50, 80, 100], // 第3節
-    [50],          // 第4節（不跨考）
-    [50, 80, 100], // 第5節
-    [50, 80, 100], // 第6節
-    [50],          // 第7節（不跨考）
+    [50,80,100],[50,80,100],[50,80,100],[50],
+    [50,80,100],[50,80,100],[50],
   ];
+
+  // ═══════════════════════════════════
+  //  模擬考資料（固定）
+  //  第一天：國文08:20(100分)、英文10:20(100分)、專業科目(一)13:10(100分)
+  //  第二天：數學08:20(80分)、專業科目(二)10:20(100分)
+  // ═══════════════════════════════════
+  const MOCK_SCHEDULE = {
+    day1: [
+      { subject:'國　文',      start:[8,20],  duration:100 },
+      { subject:'英　文',      start:[10,20], duration:100 },
+      { subject:'專業科目（一）', start:[13,10], duration:100 },
+    ],
+    day2: [
+      { subject:'數　學',      start:[8,20],  duration:80  },
+      { subject:'專業科目（二）', start:[10,20], duration:100 },
+    ],
+  };
+
   const WEEKDAYS = ['日','一','二','三','四','五','六'];
   const DAYS_EN  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
-  let examOn = false, selectedPeriod = null, selectedDuration = 50;
+  // ── 狀態 ──
+  let currentMode    = 'monthly';
+  let examOn         = false, selectedPeriod = null, selectedDuration = 50;
+  let mockOn         = false, mockDay = 'day1';
 
-  const examToggle   = document.getElementById('examToggle');
-  const examControls = document.getElementById('examControls');
-  const statusOff    = document.getElementById('statusOff');
-  const countdownBox = document.getElementById('countdownBox');
-  const countdownLabel = document.getElementById('countdownLabel');
-  const countdownTime  = document.getElementById('countdownTime');
-  const countdownBar   = document.getElementById('countdownBar');
-  const periodInfo     = document.getElementById('periodInfo');
+  // ── DOM ──
+  const examToggle    = document.getElementById('examToggle');
+  const examControls  = document.getElementById('examControls');
+  const statusOff     = document.getElementById('statusOff');
+  const countdownBox  = document.getElementById('countdownBox');
+  const countdownLabel= document.getElementById('countdownLabel');
+  const countdownTime = document.getElementById('countdownTime');
+  const countdownBar  = document.getElementById('countdownBar');
+  const periodInfo    = document.getElementById('periodInfo');
+  const durationBtnsEl= document.getElementById('durationBtns');
 
-  // 依節次重建時長按鈕
-  const durationBtnsEl = document.getElementById('durationBtns');
+  const mockToggle    = document.getElementById('mockToggle');
+  const mockStatusOff = document.getElementById('mockStatusOff');
+  const mockCDBox     = document.getElementById('mockCountdownBox');
+  const mockLabel     = document.getElementById('mockLabel');
+  const mockTime      = document.getElementById('mockTime');
+  const mockBar       = document.getElementById('mockBar');
+  const mockBreakMsg  = document.getElementById('mockBreakMsg');
+  const mockInfo      = document.getElementById('mockInfo');
+  const subjectBadge  = document.getElementById('subjectBadge');
+  const subjectName   = document.getElementById('subjectName');
 
+  // ─────────────────────────────
+  //  MODE 切換
+  // ─────────────────────────────
+  document.getElementById('btnMonthly').addEventListener('click', () => setMode('monthly'));
+  document.getElementById('btnMock').addEventListener('click',    () => setMode('mock'));
+  function setMode(mode) {
+    currentMode = mode;
+    document.getElementById('btnMonthly').classList.toggle('active', mode==='monthly');
+    document.getElementById('btnMock').classList.toggle('active',    mode==='mock');
+    document.getElementById('panelMonthly').style.display = mode==='monthly' ? '' : 'none';
+    document.getElementById('panelMock').style.display    = mode==='mock'    ? '' : 'none';
+  }
+
+  // ─────────────────────────────
+  //  月考邏輯（原有）
+  // ─────────────────────────────
   function rebuildDurationBtns(periodIdx) {
     durationBtnsEl.innerHTML = '';
     const durations = PERIOD_DURATIONS[periodIdx] || [50];
-    // 若目前 selectedDuration 不在可用清單，重設為50
-    if (!durations.includes(selectedDuration)) {
-      selectedDuration = 50;
-    }
+    if (!durations.includes(selectedDuration)) selectedDuration = 50;
     durations.forEach(d => {
       const btn = document.createElement('button');
-      btn.className = 'db' + (d === selectedDuration ? ' active' : '');
-      btn.id = `db${d}`;
+      btn.className = 'db' + (d===selectedDuration ? ' active' : '');
       btn.textContent = `${d} 分`;
       btn.addEventListener('click', () => {
         selectedDuration = d;
@@ -409,156 +526,223 @@
       durationBtnsEl.appendChild(btn);
     });
   }
-
-  // 初始建立（預設第1節）
   rebuildDurationBtns(0);
 
   function selectPeriod(i) {
     selectedPeriod = i;
-    rebuildDurationBtns(i); // 依節次更新可用時長
+    rebuildDurationBtns(i);
     countdownBox.classList.add('visible');
   }
 
-  // 依時間計算應選哪一節
-  // 優先：nowSec 在某節考試時間內（開始 ~ 開始+時長）→ 選該節
-  // 其次：nowSec 在兩節之間（下課）→ 選下一個即將開始的節次
-  // 最後：所有節次都過了 → 選最後一節
   function detectPeriod(nowSec) {
-    // 優先：找目前正在進行的考試節次
-    for (let i = 0; i < PERIODS.length; i++) {
+    for (let i=0; i<PERIODS.length; i++) {
       const s = PERIODS[i].start[0]*3600 + PERIODS[i].start[1]*60;
       if (nowSec >= s && nowSec < s + selectedDuration*60) return i;
     }
-    // 次選：找下一個即將開始的節次（下課中）
-    for (let i = 0; i < PERIODS.length; i++) {
+    for (let i=0; i<PERIODS.length; i++) {
       const s = PERIODS[i].start[0]*3600 + PERIODS[i].start[1]*60;
       if (nowSec < s) return i;
     }
-    // 所有節次都過了
     return PERIODS.length - 1;
   }
 
   function autoSelectPeriod() {
     const now = new Date();
-    const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
-    selectPeriod(detectPeriod(nowSec));
+    selectPeriod(detectPeriod(now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds()));
   }
 
   examToggle.addEventListener('change', () => {
     examOn = examToggle.checked;
     examControls.style.display = examOn ? 'flex' : 'none';
-    statusOff.style.display    = examOn ? 'none'  : 'block';
-    if (examOn) {
-      autoSelectPeriod(); // 開啟時自動選節次
-    } else {
-      selectedPeriod = null;
-      countdownBox.classList.remove('visible');
-    }
+    statusOff.style.display    = examOn ? 'none' : 'block';
+    if (examOn) { autoSelectPeriod(); }
+    else { selectedPeriod = null; countdownBox.classList.remove('visible'); }
   });
 
   function pad(n){ return String(n).padStart(2,'0'); }
 
-  // 判斷目前是否為下課時間（考試已結束 且 下一節尚未開始）
-  function effectiveExamEnd(periodIdx) {
-    const p = PERIODS[periodIdx];
-    return p.start[0]*3600 + p.start[1]*60 + selectedDuration*60;
+  function examEndSec(idx) {
+    return PERIODS[idx].start[0]*3600 + PERIODS[idx].start[1]*60 + selectedDuration*60;
   }
 
-  // 下課判斷：
-  // 情況A：還沒到本節開始時間（等待中）
-  // 情況B：考試已結束，且下一個節次尚未開始
   function isBreakTime(nowSec) {
     const p = PERIODS[selectedPeriod];
-    const periodStartSec = p.start[0]*3600 + p.start[1]*60;
-    // 情況A：等待本節開始
-    if (nowSec < periodStartSec) return true;
-    // 情況B：考試結束後等待下一節
-    const examEndSec = effectiveExamEnd(selectedPeriod);
-    if (nowSec < examEndSec) return false; // 考試進行中
-    for (let i = 0; i < PERIODS.length; i++) {
+    const pStart = p.start[0]*3600 + p.start[1]*60;
+    if (nowSec < pStart) return true;
+    const eEnd = examEndSec(selectedPeriod);
+    if (nowSec < eEnd) return false;
+    for (let i=0; i<PERIODS.length; i++) {
       const s = PERIODS[i].start[0]*3600 + PERIODS[i].start[1]*60;
-      if (s > examEndSec && nowSec < s) return true;
+      if (s > eEnd && nowSec < s) return true;
     }
     return false;
   }
 
-  // 下課時顯示的下一節：本節尚未開始→本節自己；考試結束後→考試結束後第一節
   function nextPeriodAfterExam() {
-    const p = PERIODS[selectedPeriod];
-    const periodStartSec = p.start[0]*3600 + p.start[1]*60;
-    const now = new Date();
-    const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
-    // 等待本節開始
-    if (nowSec < periodStartSec) return p;
-    // 考試結束後找下一節
-    const examEndSec = effectiveExamEnd(selectedPeriod);
-    for (let i = 0; i < PERIODS.length; i++) {
+    const pStart = PERIODS[selectedPeriod].start[0]*3600 + PERIODS[selectedPeriod].start[1]*60;
+    const nowSec = (new Date()).getHours()*3600 + (new Date()).getMinutes()*60 + (new Date()).getSeconds();
+    if (nowSec < pStart) return PERIODS[selectedPeriod];
+    const eEnd = examEndSec(selectedPeriod);
+    for (let i=0; i<PERIODS.length; i++) {
       const s = PERIODS[i].start[0]*3600 + PERIODS[i].start[1]*60;
-      if (s > examEndSec) return PERIODS[i];
+      if (s > eEnd) return PERIODS[i];
     }
     return null;
   }
 
-  function setCountdownText(a, b, c, d) {
-    document.getElementById('cd0').textContent = a;
-    document.getElementById('cd1').textContent = b;
-    document.getElementById('cd2').textContent = c;
-    document.getElementById('cd3').textContent = d;
+  function setCDText(a,b,c,d) {
+    ['cd0','cd1','cd2','cd3'].forEach((id,i)=>document.getElementById(id).textContent=[a,b,c,d][i]);
   }
 
-  function showMsg(label, msg, info = '') {
+  function showMonthlyMsg(label, msg, info='') {
     countdownLabel.textContent = label;
     countdownTime.style.display = 'none';
     countdownTime.classList.remove('urgent');
     const bm = document.getElementById('breakMsg');
-    bm.textContent = msg;
-    bm.style.display = 'block';
+    bm.textContent = msg; bm.style.display = 'block';
     countdownBar.style.width = '0%';
     periodInfo.textContent = info;
   }
 
-  function updateCountdown(now) {
+  function updateMonthly(now) {
     if (!examOn || selectedPeriod === null) return;
     const p = PERIODS[selectedPeriod];
-    const nowSec  = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
-    const endSec  = effectiveExamEnd(selectedPeriod);
-    const endH = Math.floor(endSec / 3600);
-    const endM = Math.floor((endSec % 3600) / 60);
+    const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+    const eEnd   = examEndSec(selectedPeriod);
+    const endH = Math.floor(eEnd/3600), endM = Math.floor((eEnd%3600)/60);
 
-    // ① 今日考試結束（最後一節且考試已過）
-    if (selectedPeriod === PERIODS.length - 1 && nowSec >= endSec) {
-      showMsg('今日考試已結束', '放學囉');
-      return;
+    if (selectedPeriod === PERIODS.length-1 && nowSec >= eEnd) {
+      showMonthlyMsg('今日考試已結束','放學囉'); return;
     }
-
-    // ② 下課時間（等待本節開始 or 考試結束等下一節）
     if (isBreakTime(nowSec)) {
       const next = nextPeriodAfterExam();
-      const info = next ? `下一節 第${next.label}節 ${pad(next.start[0])}:${pad(next.start[1])} 開始` : '';
-      showMsg('下課時間', '下課中', info);
+      showMonthlyMsg('下課時間','下課中',
+        next ? `下一節 第${next.label}節 ${pad(next.start[0])}:${pad(next.start[1])} 開始` : '');
       return;
     }
 
-    // ③ 考試進行中
     countdownTime.style.display = 'flex';
     document.getElementById('breakMsg').style.display = 'none';
     countdownLabel.textContent = `第 ${p.label} 節剩餘`;
-
-    const remaining = endSec - nowSec;
-    if (remaining <= 0) {
-      setCountdownText('已', '結', '束', '');
+    const rem = eEnd - nowSec;
+    if (rem <= 0) {
+      setCDText('已','結','束','');
       countdownTime.classList.remove('urgent');
       countdownBar.style.width = '0%';
       periodInfo.textContent = '';
     } else {
-      const mm = pad(Math.floor(remaining/60)), ss = pad(remaining%60);
-      setCountdownText(mm[0], mm[1], ss[0], ss[1]);
-      countdownTime.classList.toggle('urgent', remaining <= 300);
-      countdownBar.style.width = Math.min(100, remaining/(selectedDuration*60)*100) + '%';
+      const mm=pad(Math.floor(rem/60)), ss=pad(rem%60);
+      setCDText(mm[0],mm[1],ss[0],ss[1]);
+      countdownTime.classList.toggle('urgent', rem<=300);
+      countdownBar.style.width = Math.min(100, rem/(selectedDuration*60)*100)+'%';
       periodInfo.textContent = `${pad(p.start[0])}:${pad(p.start[1])} ～ ${pad(endH)}:${pad(endM)}`;
     }
   }
 
+  // ─────────────────────────────
+  //  模擬考邏輯（新增）
+  // ─────────────────────────────
+  document.getElementById('btnDay1').addEventListener('click', () => setMockDay('day1'));
+  document.getElementById('btnDay2').addEventListener('click', () => setMockDay('day2'));
+
+  function setMockDay(day) {
+    mockDay = day;
+    document.getElementById('btnDay1').className = 'pb' + (day==='day1' ? ' active-purple' : '');
+    document.getElementById('btnDay2').className = 'pb' + (day==='day2' ? ' active-purple' : '');
+  }
+
+  mockToggle.addEventListener('change', () => {
+    mockOn = mockToggle.checked;
+    mockStatusOff.style.display = mockOn ? 'none' : 'block';
+    if (mockOn) {
+      mockCDBox.classList.add('visible');
+      subjectBadge.classList.add('visible');
+    } else {
+      mockCDBox.classList.remove('visible');
+      subjectBadge.classList.remove('visible');
+    }
+  });
+
+  // 取得模擬考當前狀態
+  function getMockState(nowSec) {
+    const schedule = MOCK_SCHEDULE[mockDay];
+    // 正在考試中？
+    for (let i=0; i<schedule.length; i++) {
+      const s = schedule[i].start[0]*3600 + schedule[i].start[1]*60;
+      const e = s + schedule[i].duration*60;
+      if (nowSec >= s && nowSec < e)
+        return { status:'active', item:schedule[i], startSec:s, endSec:e };
+    }
+    // 尚未開始或下課中？
+    for (let i=0; i<schedule.length; i++) {
+      const s = schedule[i].start[0]*3600 + schedule[i].start[1]*60;
+      if (nowSec < s)
+        return { status: i===0 ? 'before' : 'between', item:schedule[i], nextSec:s };
+    }
+    return { status:'done' };
+  }
+
+  function setMockCDText(a,b,c,d) {
+    ['mcd0','mcd1','mcd2','mcd3'].forEach((id,i)=>document.getElementById(id).textContent=[a,b,c,d][i]);
+  }
+
+  function showMockMsg(label, msg, info='', subject='') {
+    mockLabel.textContent = label;
+    mockTime.style.display = 'none';
+    mockTime.classList.remove('urgent');
+    mockBreakMsg.textContent = msg; mockBreakMsg.style.display = 'block';
+    mockBar.style.width = '0%';
+    mockInfo.textContent = info;
+    if (subject) subjectName.textContent = subject;
+  }
+
+  function updateMock(now) {
+    if (!mockOn) return;
+    const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+    const state  = getMockState(nowSec);
+
+    if (state.status === 'done') {
+      showMockMsg('今日模擬考已結束','放學囉','','—');
+      return;
+    }
+
+    if (state.status === 'before' || state.status === 'between') {
+      const nh = Math.floor(state.nextSec/3600), nm = Math.floor((state.nextSec%3600)/60);
+      showMockMsg(
+        state.status==='before' ? '考試尚未開始' : '下課中',
+        '下課中',
+        `下一科　${state.item.subject}　${pad(nh)}:${pad(nm)} 開始`,
+        state.item.subject
+      );
+      return;
+    }
+
+    // active：只顯示剩餘時間，不可提早交卷（無「可提早交卷」概念）
+    mockTime.style.display = 'flex';
+    mockBreakMsg.style.display = 'none';
+    mockLabel.textContent = state.item.subject + '　剩餘';
+    subjectName.textContent = state.item.subject;
+
+    const rem = state.endSec - nowSec;
+    if (rem <= 0) {
+      setMockCDText('已','結','束','');
+      mockTime.classList.remove('urgent');
+      mockBar.style.width = '0%';
+      mockInfo.textContent = '';
+    } else {
+      const mm=pad(Math.floor(rem/60)), ss=pad(rem%60);
+      setMockCDText(mm[0],mm[1],ss[0],ss[1]);
+      mockTime.classList.toggle('urgent', rem<=600); // 最後10分鐘警示
+      mockBar.style.width = Math.min(100, rem/(state.item.duration*60)*100)+'%';
+      const sH=Math.floor(state.startSec/3600), sM=Math.floor((state.startSec%3600)/60);
+      const eH=Math.floor(state.endSec/3600),   eM=Math.floor((state.endSec%3600)/60);
+      mockInfo.textContent = `${pad(sH)}:${pad(sM)} ～ ${pad(eH)}:${pad(eM)}`;
+    }
+  }
+
+  // ─────────────────────────────
+  //  主 tick
+  // ─────────────────────────────
   function tick() {
     const now = new Date();
     document.getElementById('h0').textContent = pad(now.getHours())[0];
@@ -571,13 +755,14 @@
       `${now.getFullYear()} · ${pad(now.getMonth()+1)} · ${pad(now.getDate())}`;
     document.getElementById('weekday').textContent =
       `星期${WEEKDAYS[now.getDay()]}  ·  ${DAYS_EN[now.getDay()]}`;
-    // 每秒自動偵測節次切換（detectPeriod 只看節次開始時間，與時長無關）
+
     if (examOn) {
       const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
       const correct = detectPeriod(nowSec);
       if (correct !== selectedPeriod) selectPeriod(correct);
     }
-    updateCountdown(now);
+    updateMonthly(now);
+    updateMock(now);
   }
 
   tick();

@@ -230,18 +230,43 @@
 
     .countdown-label { font-size: 0.8rem; color: var(--accent2); letter-spacing: 0.15em; }
 
+    /* 倒數時間：固定寬高方塊，與主時鐘相同手法 */
     .countdown-time {
+      display: flex;
+      align-items: center;
+      justify-content: center;
       font-family: 'Orbitron', monospace;
-      font-size: clamp(2.5rem, 12vw, 6rem);
       font-weight: 900;
+      font-size: clamp(2.5rem, 12vw, 6rem);
+      line-height: 1;
+    }
+    .cd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: clamp(1.6rem, 7.5vw, 4rem);
+      height: clamp(2rem, 9vw, 5rem);
       color: var(--accent2);
       text-shadow: var(--glow2);
-      letter-spacing: 0.05em;
-      white-space: nowrap;
+      flex-shrink: 0;
     }
-    .countdown-time.urgent {
+    .cd-colon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: clamp(0.6rem, 2.5vw, 1.4rem);
+      height: clamp(2rem, 9vw, 5rem);
+      color: var(--accent2);
+      text-shadow: var(--glow2);
+      flex-shrink: 0;
+      padding-bottom: 0.1em;
+    }
+    .countdown-time.urgent .cd,
+    .countdown-time.urgent .cd-colon {
       color: #ff3b3b;
       text-shadow: 0 0 20px rgba(255,59,59,0.6);
+    }
+    .countdown-time.urgent {
       animation: pulse 0.5s ease-in-out infinite alternate;
     }
     @keyframes pulse { to { opacity: 0.55; } }
@@ -302,7 +327,11 @@
       </div>
       <div class="countdown-box" id="countdownBox">
         <div class="countdown-label" id="countdownLabel">第 1 節剩餘</div>
-        <div class="countdown-time" id="countdownTime">--:--</div>
+        <div class="countdown-time" id="countdownTime">
+          <span class="cd" id="cd0">-</span><span class="cd" id="cd1">-</span>
+          <span class="cd-colon">:</span>
+          <span class="cd" id="cd2">-</span><span class="cd" id="cd3">-</span>
+        </div>
         <div class="countdown-bar-wrap"><div class="countdown-bar" id="countdownBar" style="width:100%"></div></div>
         <div class="period-info" id="periodInfo"></div>
       </div>
@@ -406,12 +435,19 @@
     countdownLabel.textContent = `第 ${p.label} 節剩餘`;
 
     if (remaining <= 0) {
-      countdownTime.textContent = '已結束';
+      document.getElementById('cd0').textContent = '已';
+      document.getElementById('cd1').textContent = '結';
+      document.getElementById('cd2').textContent = '束';
+      document.getElementById('cd3').textContent = '';
       countdownTime.classList.remove('urgent');
       countdownBar.style.width = '0%';
       periodInfo.textContent = '';
     } else {
-      countdownTime.textContent = `${pad(Math.floor(remaining/60))}:${pad(remaining%60)}`;
+      const mm = pad(Math.floor(remaining/60)), ss = pad(remaining%60);
+      document.getElementById('cd0').textContent = mm[0];
+      document.getElementById('cd1').textContent = mm[1];
+      document.getElementById('cd2').textContent = ss[0];
+      document.getElementById('cd3').textContent = ss[1];
       countdownTime.classList.toggle('urgent', remaining <= 300);
       countdownBar.style.width = Math.min(100, remaining/(selectedDuration*60)*100) + '%';
       periodInfo.textContent = `${pad(p.start[0])}:${pad(p.start[1])} ～ ${pad(endH)}:${pad(endM)}`;

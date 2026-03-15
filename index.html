@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>教室時鐘 - 螢光綠版</title>
+  <title>教室時鐘</title>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Noto+Sans+TC:wght@300;400&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -12,13 +12,12 @@
       --bg: #0a0e1a;
       --panel: #111827;
       --border: #1e3a5f;
-      /* 改為螢光綠色 */
-      --accent: #39ff14; 
-      --accent2: #ccff00; /* 次要色改為黃綠色 */
+      --accent: #00d4ff;
+      --accent2: #ff6b35;
       --text: #e2e8f0;
       --dim: #64748b;
-      --glow: 0 0 24px rgba(57, 255, 20, 0.5);
-      --glow2: 0 0 20px rgba(204, 255, 0, 0.4);
+      --glow: 0 0 24px rgba(0,212,255,0.5);
+      --glow2: 0 0 20px rgba(255,107,53,0.5);
     }
 
     body {
@@ -36,10 +35,9 @@
       content: '';
       position: fixed;
       inset: 0;
-      /* 背景網格也同步改為淡淡的綠色 */
       background-image:
-        linear-gradient(rgba(57, 255, 20, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(57, 255, 20, 0.03) 1px, transparent 1px);
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
       background-size: 40px 40px;
       animation: gridMove 20s linear infinite;
       pointer-events: none;
@@ -57,6 +55,7 @@
       width: min(800px, 96vw);
     }
 
+    /* DATE */
     .date-line {
       font-family: 'Orbitron', monospace;
       font-size: clamp(0.7rem, 2vw, 1rem);
@@ -64,6 +63,7 @@
       letter-spacing: 0.2em;
     }
 
+    /* DIGITAL CLOCK — 每個數字放固定尺寸方塊，完全不跳動 */
     .digital {
       display: flex;
       align-items: center;
@@ -71,6 +71,7 @@
       gap: 0.4vw;
       width: 100%;
     }
+    /* 固定寬高的數字卡片，字放中間 */
     .d {
       display: inline-flex;
       align-items: center;
@@ -108,12 +109,14 @@
       letter-spacing: 0.2em;
     }
 
+    /* DIVIDER */
     .divider {
       width: 100%;
       height: 1px;
       background: linear-gradient(90deg, transparent, var(--border), var(--accent), var(--border), transparent);
     }
 
+    /* EXAM PANEL */
     .exam-panel {
       width: 100%;
       background: var(--panel);
@@ -198,7 +201,20 @@
       transition: all .2s;
     }
     .pb:hover { border-color: var(--accent); color: var(--accent); }
-    .pb.active { border-color: var(--accent2); color: var(--accent2); background: rgba(204, 255, 0, 0.08); box-shadow: var(--glow2); }
+    .pb.active { border-color: var(--accent2); color: var(--accent2); background: rgba(255,107,53,0.08); box-shadow: var(--glow2); }
+    .db {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.75rem;
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--dim);
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .db:hover { border-color: var(--green); color: var(--green); }
+    .db.active { border-color: var(--green); color: var(--green); background: rgba(0,255,157,0.08); box-shadow: 0 0 14px rgba(0,255,157,0.3); }
 
     .countdown-box {
       display: none;
@@ -206,8 +222,8 @@
       align-items: center;
       gap: 8px;
       padding: 16px;
-      background: rgba(204, 255, 0, 0.05);
-      border: 1px solid rgba(204, 255, 0, 0.2);
+      background: rgba(255,107,53,0.05);
+      border: 1px solid rgba(255,107,53,0.2);
       border-radius: 10px;
     }
     .countdown-box.visible { display: flex; }
@@ -232,12 +248,12 @@
 
     .countdown-bar-wrap {
       width: 100%; height: 5px;
-      background: rgba(204, 255, 0, 0.15);
+      background: rgba(255,107,53,0.15);
       border-radius: 99px; overflow: hidden;
     }
     .countdown-bar {
       height: 100%; border-radius: 99px;
-      background: linear-gradient(90deg, var(--accent2), var(--accent));
+      background: linear-gradient(90deg, var(--accent2), #ff3b3b);
       transition: width 1s linear;
     }
     .period-info { font-size: 0.78rem; color: var(--dim); }
@@ -250,7 +266,10 @@
 </head>
 <body>
 <div class="container">
+
   <div class="date-line" id="dateLine"></div>
+
+  <!-- DIGITAL CLOCK: 每位數字獨立 span，固定 1ch，永不跳動 -->
   <div class="digital">
     <span class="d" id="h0">0</span><span class="d" id="h1">0</span>
     <span class="colon">:</span>
@@ -258,8 +277,11 @@
     <span class="colon">:</span>
     <span class="d" id="s0">0</span><span class="d" id="s1">0</span>
   </div>
+
   <div class="weekday" id="weekday"></div>
+
   <div class="divider"></div>
+
   <div class="exam-panel">
     <div class="exam-header">
       <div class="exam-title">考試剩餘時間</div>
@@ -272,10 +294,11 @@
         開啟
       </label>
     </div>
+
     <div id="examControls" style="display:none; flex-direction:column; gap:12px;">
-      <div class="period-row">
-        <span class="period-label">選擇節次：</span>
-        <div class="period-btns" id="periodBtns"></div>
+<div class="period-row">
+        <span class="period-label">考試時長：</span>
+        <div class="period-btns" id="durationBtns"></div>
       </div>
       <div class="countdown-box" id="countdownBox">
         <div class="countdown-label" id="countdownLabel">第 1 節剩餘</div>
@@ -284,23 +307,26 @@
         <div class="period-info" id="periodInfo"></div>
       </div>
     </div>
+
     <div class="status-off" id="statusOff">開啟開關以顯示考試剩餘時間</div>
   </div>
+
 </div>
 <script>
   const PERIODS = [
-    { label:'1', start:[8,10],  end:[9,0]   },
-    { label:'2', start:[9,10],  end:[10,0]  },
-    { label:'3', start:[10,10], end:[11,0]  },
-    { label:'4', start:[11,10], end:[12,0]  },
-    { label:'5', start:[13,5],  end:[13,55] },
-    { label:'6', start:[14,5],  end:[14,55] },
-    { label:'7', start:[15,10], end:[16,0]  },
+    { label:'1', start:[8,10]  },
+    { label:'2', start:[9,10]  },
+    { label:'3', start:[10,10] },
+    { label:'4', start:[11,10] },
+    { label:'5', start:[13,5]  },
+    { label:'6', start:[14,5]  },
+    { label:'7', start:[15,10] },
   ];
+  const DURATIONS = [50, 80, 100]; // 分鐘
   const WEEKDAYS = ['日','一','二','三','四','五','六'];
   const DAYS_EN  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
-  let examOn = false, selectedPeriod = null;
+  let examOn = false, selectedPeriod = null, selectedDuration = 50;
 
   const examToggle   = document.getElementById('examToggle');
   const examControls = document.getElementById('examControls');
@@ -311,27 +337,55 @@
   const countdownBar   = document.getElementById('countdownBar');
   const periodInfo     = document.getElementById('periodInfo');
 
-  PERIODS.forEach((p, i) => {
+  // 建立時長按鈕
+  const durationBtnsEl = document.getElementById('durationBtns');
+  DURATIONS.forEach(d => {
     const btn = document.createElement('button');
-    btn.className = 'pb';
-    btn.textContent = `第${p.label}節`;
+    btn.className = 'db' + (d === 50 ? ' active' : '');
+    btn.id = `db${d}`;
+    btn.textContent = `${d} 分`;
     btn.addEventListener('click', () => {
-      selectedPeriod = i;
-      document.querySelectorAll('.pb').forEach(b => b.classList.remove('active'));
+      selectedDuration = d;
+      document.querySelectorAll('.db').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      countdownBox.classList.add('visible');
+      if (selectedPeriod !== null) countdownBox.classList.add('visible'); // auto-selected
     });
-    document.getElementById('periodBtns').appendChild(btn);
+    durationBtnsEl.appendChild(btn);
   });
+
+  function selectPeriod(i) {
+    selectedPeriod = i;
+    countdownBox.classList.add('visible');
+  }
+
+  // 依時間計算應選哪一節（只回傳 index）
+  function detectPeriod(nowSec) {
+    // 找出「最後一個已開始」的節次（節次開始時間 <= 現在）
+    let last = -1;
+    for (let i = 0; i < PERIODS.length; i++) {
+      const s = PERIODS[i].start[0]*3600 + PERIODS[i].start[1]*60;
+      if (nowSec >= s) last = i;
+    }
+    if (last >= 0) return last;
+    // 還沒到第一節，選第一節
+    return 0;
+  }
+
+  function autoSelectPeriod() {
+    const now = new Date();
+    const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+    selectPeriod(detectPeriod(nowSec));
+  }
 
   examToggle.addEventListener('change', () => {
     examOn = examToggle.checked;
     examControls.style.display = examOn ? 'flex' : 'none';
     statusOff.style.display    = examOn ? 'none'  : 'block';
-    if (!examOn) {
+    if (examOn) {
+      autoSelectPeriod(); // 開啟時自動選節次
+    } else {
       selectedPeriod = null;
       countdownBox.classList.remove('visible');
-      document.querySelectorAll('.pb').forEach(b => b.classList.remove('active'));
     }
   });
 
@@ -340,11 +394,14 @@
   function updateCountdown(now) {
     if (!examOn || selectedPeriod === null) return;
     const p = PERIODS[selectedPeriod];
-    const endSec   = p.end[0]*3600   + p.end[1]*60;
     const startSec = p.start[0]*3600 + p.start[1]*60;
+    const endSec   = startSec + selectedDuration * 60; // 依選定時長計算結束時間
     const nowSec   = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
     const remaining = endSec - nowSec;
-    const total     = endSec - startSec;
+
+    // 計算考試結束的時鐘時間顯示
+    const endH = Math.floor(endSec / 3600);
+    const endM = Math.floor((endSec % 3600) / 60);
 
     countdownLabel.textContent = `第 ${p.label} 節剩餘`;
 
@@ -356,8 +413,8 @@
     } else {
       countdownTime.textContent = `${pad(Math.floor(remaining/60))}:${pad(remaining%60)}`;
       countdownTime.classList.toggle('urgent', remaining <= 300);
-      countdownBar.style.width = Math.min(100, remaining/total*100) + '%';
-      periodInfo.textContent = `${pad(p.start[0])}:${pad(p.start[1])} ～ ${pad(p.end[0])}:${pad(p.end[1])}`;
+      countdownBar.style.width = Math.min(100, remaining/(selectedDuration*60)*100) + '%';
+      periodInfo.textContent = `${pad(p.start[0])}:${pad(p.start[1])} ～ ${pad(endH)}:${pad(endM)}`;
     }
   }
 
@@ -373,6 +430,12 @@
       `${now.getFullYear()} · ${pad(now.getMonth()+1)} · ${pad(now.getDate())}`;
     document.getElementById('weekday').textContent =
       `星期${WEEKDAYS[now.getDay()]}  ·  ${DAYS_EN[now.getDay()]}`;
+    // 每秒自動偵測節次切換
+    if (examOn) {
+      const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+      const correct = detectPeriod(nowSec);
+      if (correct !== selectedPeriod) selectPeriod(correct);
+    }
     updateCountdown(now);
   }
 

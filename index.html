@@ -267,6 +267,14 @@
       color: #ff3b3b;
       text-shadow: 0 0 20px rgba(255,59,59,0.6);
     }
+    .break-msg {
+      font-family: 'Orbitron', monospace;
+      font-weight: 900;
+      font-size: clamp(2.5rem, 12vw, 6rem);
+      color: var(--accent2);
+      text-shadow: var(--glow2);
+      letter-spacing: 0.1em;
+    }
     .countdown-time.urgent {
       animation: pulse 0.5s ease-in-out infinite alternate;
     }
@@ -333,6 +341,7 @@
           <span class="cd-colon">:</span>
           <span class="cd" id="cd2">-</span><span class="cd" id="cd3">-</span>
         </div>
+        <div class="break-msg" id="breakMsg" style="display:none;">下課中</div>
         <div class="countdown-bar-wrap"><div class="countdown-bar" id="countdownBar" style="width:100%"></div></div>
         <div class="period-info" id="periodInfo"></div>
       </div>
@@ -378,7 +387,7 @@
       selectedDuration = d;
       document.querySelectorAll('.db').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      if (selectedPeriod !== null) countdownBox.classList.add('visible'); // auto-selected
+      autoSelectPeriod(); // 時長改變時重新偵測節次
     });
     durationBtnsEl.appendChild(btn);
   });
@@ -388,17 +397,23 @@
     countdownBox.classList.add('visible');
   }
 
-  // 依時間計算應選哪一節（只回傳 index）
+  // 依時間計算應選哪一節
+  // 優先：nowSec 在某節考試時間內（開始 ~ 開始+時長）→ 選該節
+  // 其次：nowSec 在兩節之間（下課）→ 選下一個即將開始的節次
+  // 最後：所有節次都過了 → 選最後一節
   function detectPeriod(nowSec) {
-    // 找出「最後一個已開始」的節次（節次開始時間 <= 現在）
-    let last = -1;
+    // 優先：找目前正在進行的考試節次
     for (let i = 0; i < PERIODS.length; i++) {
       const s = PERIODS[i].start[0]*3600 + PERIODS[i].start[1]*60;
-      if (nowSec >= s) last = i;
+      if (nowSec >= s && nowSec < s + selectedDuration*60) return i;
     }
-    if (last >= 0) return last;
-    // 還沒到第一節，選第一節
-    return 0;
+    // 次選：找下一個即將開始的節次（下課中）
+    for (let i = 0; i < PERIODS.length; i++) {
+      const s = PERIODS[i].start[0]*3600 + PERIODS[i].start[1]*60;
+      if (nowSec < s) return i;
+    }
+    // 所有節次都過了
+    return PERIODS.length - 1;
   }
 
   function autoSelectPeriod() {
@@ -421,34 +436,101 @@
 
   function pad(n){ return String(n).padStart(2,'0'); }
 
+  // 判斷目前是否為下課時間（考試已結束 且 下一節尚未開始）
+  function effectiveExamEnd(periodIdx) {
+    const p = PERIODS[periodIdx];
+    return p.start[0]*3600 + p.start[1]*60 + selectedDuration*60;
+  }
+
+  // 下課判斷：
+  // 情況A：還沒到本節開始時間（等待中）
+  // 情況B：考試已結束，且下一個節次尚未開始
+  function isBreakTime(nowSec) {
+    const p = PERIODS[selectedPeriod];
+    const periodStartSec = p.start[0]*3600 + p.start[1]*60;
+    // 情況A：等待本節開始
+    if (nowSec < periodStartSec) return true;
+    // 情況B：考試結束後等待下一節
+    const examEndSec = effectiveExamEnd(selectedPeriod);
+    if (nowSec < examEndSec) return false; // 考試進行中
+    for (let i = 0; i < PERIODS.length; i++) {
+      const s = PERIODS[i].start[0]*3600 + PERIODS[i].start[1]*60;
+      if (s > examEndSec && nowSec < s) return true;
+    }
+    return false;
+  }
+
+  // 下課時顯示的下一節：本節尚未開始→本節自己；考試結束後→考試結束後第一節
+  function nextPeriodAfterExam() {
+    const p = PERIODS[selectedPeriod];
+    const periodStartSec = p.start[0]*3600 + p.start[1]*60;
+    const now = new Date();
+    const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+    // 等待本節開始
+    if (nowSec < periodStartSec) return p;
+    // 考試結束後找下一節
+    const examEndSec = effectiveExamEnd(selectedPeriod);
+    for (let i = 0; i < PERIODS.length; i++) {
+      const s = PERIODS[i].start[0]*3600 + PERIODS[i].start[1]*60;
+      if (s > examEndSec) return PERIODS[i];
+    }
+    return null;
+  }
+
+  function setCountdownText(a, b, c, d) {
+    document.getElementById('cd0').textContent = a;
+    document.getElementById('cd1').textContent = b;
+    document.getElementById('cd2').textContent = c;
+    document.getElementById('cd3').textContent = d;
+  }
+
+  function showMsg(label, msg, info = '') {
+    countdownLabel.textContent = label;
+    countdownTime.style.display = 'none';
+    countdownTime.classList.remove('urgent');
+    const bm = document.getElementById('breakMsg');
+    bm.textContent = msg;
+    bm.style.display = 'block';
+    countdownBar.style.width = '0%';
+    periodInfo.textContent = info;
+  }
+
   function updateCountdown(now) {
     if (!examOn || selectedPeriod === null) return;
     const p = PERIODS[selectedPeriod];
-    const startSec = p.start[0]*3600 + p.start[1]*60;
-    const endSec   = startSec + selectedDuration * 60; // 依選定時長計算結束時間
-    const nowSec   = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
-    const remaining = endSec - nowSec;
-
-    // 計算考試結束的時鐘時間顯示
+    const nowSec  = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+    const endSec  = effectiveExamEnd(selectedPeriod);
     const endH = Math.floor(endSec / 3600);
     const endM = Math.floor((endSec % 3600) / 60);
 
+    // ① 今日考試結束（最後一節且考試已過）
+    if (selectedPeriod === PERIODS.length - 1 && nowSec >= endSec) {
+      showMsg('今日考試已結束', '放學囉');
+      return;
+    }
+
+    // ② 下課時間（等待本節開始 or 考試結束等下一節）
+    if (isBreakTime(nowSec)) {
+      const next = nextPeriodAfterExam();
+      const info = next ? `下一節 第${next.label}節 ${pad(next.start[0])}:${pad(next.start[1])} 開始` : '';
+      showMsg('下課時間', '下課中', info);
+      return;
+    }
+
+    // ③ 考試進行中
+    countdownTime.style.display = 'flex';
+    document.getElementById('breakMsg').style.display = 'none';
     countdownLabel.textContent = `第 ${p.label} 節剩餘`;
 
+    const remaining = endSec - nowSec;
     if (remaining <= 0) {
-      document.getElementById('cd0').textContent = '已';
-      document.getElementById('cd1').textContent = '結';
-      document.getElementById('cd2').textContent = '束';
-      document.getElementById('cd3').textContent = '';
+      setCountdownText('已', '結', '束', '');
       countdownTime.classList.remove('urgent');
       countdownBar.style.width = '0%';
       periodInfo.textContent = '';
     } else {
       const mm = pad(Math.floor(remaining/60)), ss = pad(remaining%60);
-      document.getElementById('cd0').textContent = mm[0];
-      document.getElementById('cd1').textContent = mm[1];
-      document.getElementById('cd2').textContent = ss[0];
-      document.getElementById('cd3').textContent = ss[1];
+      setCountdownText(mm[0], mm[1], ss[0], ss[1]);
       countdownTime.classList.toggle('urgent', remaining <= 300);
       countdownBar.style.width = Math.min(100, remaining/(selectedDuration*60)*100) + '%';
       periodInfo.textContent = `${pad(p.start[0])}:${pad(p.start[1])} ～ ${pad(endH)}:${pad(endM)}`;
@@ -467,7 +549,7 @@
       `${now.getFullYear()} · ${pad(now.getMonth()+1)} · ${pad(now.getDate())}`;
     document.getElementById('weekday').textContent =
       `星期${WEEKDAYS[now.getDay()]}  ·  ${DAYS_EN[now.getDay()]}`;
-    // 每秒自動偵測節次切換
+    // 每秒自動偵測節次切換（detectPeriod 只看節次開始時間，與時長無關）
     if (examOn) {
       const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
       const correct = detectPeriod(nowSec);

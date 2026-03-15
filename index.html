@@ -361,7 +361,16 @@
     { label:'6', start:[14,5]  },
     { label:'7', start:[15,10] },
   ];
-  const DURATIONS = [50, 80, 100]; // 分鐘
+  // 各節可用的考試時長（第4節index=3、第7節index=6只能50分）
+  const PERIOD_DURATIONS = [
+    [50, 80, 100], // 第1節
+    [50, 80, 100], // 第2節
+    [50, 80, 100], // 第3節
+    [50],          // 第4節（不跨考）
+    [50, 80, 100], // 第5節
+    [50, 80, 100], // 第6節
+    [50],          // 第7節（不跨考）
+  ];
   const WEEKDAYS = ['日','一','二','三','四','五','六'];
   const DAYS_EN  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
@@ -376,24 +385,37 @@
   const countdownBar   = document.getElementById('countdownBar');
   const periodInfo     = document.getElementById('periodInfo');
 
-  // 建立時長按鈕
+  // 依節次重建時長按鈕
   const durationBtnsEl = document.getElementById('durationBtns');
-  DURATIONS.forEach(d => {
-    const btn = document.createElement('button');
-    btn.className = 'db' + (d === 50 ? ' active' : '');
-    btn.id = `db${d}`;
-    btn.textContent = `${d} 分`;
-    btn.addEventListener('click', () => {
-      selectedDuration = d;
-      document.querySelectorAll('.db').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      autoSelectPeriod(); // 時長改變時重新偵測節次
+
+  function rebuildDurationBtns(periodIdx) {
+    durationBtnsEl.innerHTML = '';
+    const durations = PERIOD_DURATIONS[periodIdx] || [50];
+    // 若目前 selectedDuration 不在可用清單，重設為50
+    if (!durations.includes(selectedDuration)) {
+      selectedDuration = 50;
+    }
+    durations.forEach(d => {
+      const btn = document.createElement('button');
+      btn.className = 'db' + (d === selectedDuration ? ' active' : '');
+      btn.id = `db${d}`;
+      btn.textContent = `${d} 分`;
+      btn.addEventListener('click', () => {
+        selectedDuration = d;
+        document.querySelectorAll('.db').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        autoSelectPeriod();
+      });
+      durationBtnsEl.appendChild(btn);
     });
-    durationBtnsEl.appendChild(btn);
-  });
+  }
+
+  // 初始建立（預設第1節）
+  rebuildDurationBtns(0);
 
   function selectPeriod(i) {
     selectedPeriod = i;
+    rebuildDurationBtns(i); // 依節次更新可用時長
     countdownBox.classList.add('visible');
   }
 

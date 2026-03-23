@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; }
+  body { overflow:hidden; background:#031520; cursor:default; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+/* ═══════════════════════════════
+   珊瑚海洋 – Coral Reef & Nemo
+   ═══════════════════════════════ */
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W = canvas.width = window.innerWidth;
+let H = canvas.height = window.innerHeight;
+window.addEventListener('resize', () => { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; init(); });
+
+let mousePos = { x: -999, y: -999 };
+let smoothWindX = 0, smoothWindY = 0;
+const WIND_DECAY = 0.93, WIND_GAIN = 0.6;
+
+const DENSITIES = [
+  { label: '寧靜珊瑚', spawn: 8,  fish: 6 },
+  { label: '珊瑚花園', spawn: 20, fish: 14 },
+  { label: '產卵季節', spawn: 50, fish: 25 },
+];
+let densityIdx = 1;
+
+function rand(a, b) { return a + Math.random() * (b - a); }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function hexToRgb(hex) { return [(hex>>16)&255, (hex>>8)&255, hex&255]; }
+
+window.addEventListener('message', (e) => {
+  if (e.data.type === 'mousemove') {
+    mousePos.x = e.data.x; mousePos.y = e.data.y;
+    smoothWindX += e.data.windVX * e.data.windStrength * WIND_GAIN;
+    smoothWindY += e.data.windVY * e.data.windStrength * WIND_GAIN;
+  }
+  if (e.data.type === 'density') {
+    densityIdx = (densityIdx + e.data.dir + DENSITIES.length) % DENSITIES.length;
+    buildFish();
+    parent.postMessage({ type: 'densityLabel', label: DENSITIES[densityIdx].label }, '*');
+  }
+  if (e.data.type === 'click') {
+    handleClick(e.data.x, e.data.y);
+  }
+});
+
+// ═══════════════════════════════
+//  Corals (static scenery)
+// ═══════════════════════════════
+const CORAL_COLORS = ['#ff6b6b','#ff9a76','#ffc078','#ee5a9a','#c77dff','#ff7eb3','#ffa07a','#e86e80'];
+const SEAWEED_COLORS = ['#22aa66','#33bb77','#44cc88','#2a9960','#55dd99'];
+let corals = [];
+let seaweeds = [];
+let anemones = []; // clickable!
+let crabs = [];
+
+function buildScenery() {
+  corals = [];
+  seaweeds = [];
+  anemones = [];
+  const groundY = H * 0.78;
+  const bottomY = H;
+
+  // Corals — spread across ground and bottom
+  const coralCount = Math.floor(W / 60);
+  for (let i = 0; i < coralCount; i++) {
+    const x = rand(20, W - 20);
+    const inBottom = Math.random() > 0.5; // half on ground line, half scattered below
+    const y = inBottom ? rand(groundY + 10, bottomY - 15) : groundY + rand(-5, 15);
+    const type = Math.floor(rand(0, 3));
+    const size = rand(25, 70);
+    // Pre-generate recursive branch tree (like real coral photos)
+    function makeBranch(depth, parentAngle, spread) {
+      if (depth <= 0) return null;
+      const childCount = depth >= 3 ? Math.floor(rand(2, 4)) : Math.floor(rand(2, 3));
+      const children = [];
+      for (let c = 0; c < childCount; c++) {
+        const angleOff = (c / (childCount - 1 || 1) - 0.5) * spread;
+        children.push({
+          angle: parentAngle + angleOff + rand(-0.15, 0.15),
+          lenFactor: rand(0.5, 0.75),
+          thickness: depth * 0.7,
+          curve: rand(-0.3, 0.3),
+          children: makeBranch(depth - 1, parentAngle + angleOff, spread * 0.7),
+        });
+      }
+      return children;
+    }
+    const branchData = makeBranch(type === 0 ? 4 : 3, -Math.PI / 2, 1.4) || [];
+    // Pre-generate brain coral bumps
+    const bumps = [];
+    for (let b = 0; b < 6; b++) {
+      bumps.push({ dx: ((b*17+3)%20)-10, dy: ((b*13+7)%14)-7, r: 4+((b*11)%8) });
+    }
+    corals.push({
+      x, y, type,
+      color: CORAL_COLORS[Math.floor(rand(0, CORAL_COLORS.length))],
+      size, branchData, bumps,
+    });
+  }
+
+  // Seaweeds
+  for (let i = 0; i < 14; i++) {
+    const inBottom = Math.random() > 0.6;
+    seaweeds.push({
+      x: rand(10, W - 10),
+      baseY: inBottom ? rand(groundY + 15, bottomY - 5) : groundY + rand(0, 10),
+      height: rand(35, 100), color: SEAWEED_COLORS[Math.floor(rand(0, SEAWEED_COLORS.length))],
+      phase: rand(0, Math.PI * 2), segments: Math.floor(rand(5, 10)),
+    });
+  }
+
+  // Anemones — spread across ground line AND bottom area
+  const anemoneColors = ['#cc44aa','#aa55cc','#ee6688','#dd55bb','#bb66dd','#ff7799','#cc88dd'];
+  const anemoneCount = Math.floor(W / 100);
+  for (let i = 0; i < anemoneCount; i++) {
+    // Mix: some on ground line, some in bottom area
+    const row = i % 3; // 0=ground line, 1=mid bottom, 2=near bottom edge
+    let y;
+    if (row === 0) y = groundY + rand(-5, 5);
+    else if (row === 1) y = rand(groundY + 20, groundY + (bottomY - groundY) * 0.5);
+    else y = rand(groundY + (bottomY - groundY) * 0.4, bottomY - 20);
+
+    anemones.push({
+      x: rand(50, W - 50),
+      y,
+      size: rand(35, 110),
+      color: anemoneColors[i % anemoneColors.length],
+      tentacles: Math.floor(rand(14, 24)),
+      swayPhase: rand(0, Math.PI * 2),
+    });
+  }
+
+  // Crabs
+  crabs = [];
+  const crabColors = ['#cc4422','#dd6633','#bb3311','#aa5533','#cc5544'];
+  for (let i = 0; i < 5; i++) {
+    const dir = Math.random() > 0.5 ? 1 : -1;
+    crabs.push({
+      x: rand(30, W - 30),
+      y: rand(groundY + 5, bottomY - 8),
+      dir,
+      speed: rand(0.2, 0.6),
+      size: rand(6, 12),
+      color: crabColors[i % crabColors.length],
+      legPhase: rand(0, Math.PI * 2),
+      pauseTimer: 0, // pause occasionally
+      clawOpen: 0,
+    });
+  }
+}
+
+// ═══════════════════════════════
+//  Fish schools
+// ═══════════════════════════════
+const FISH_COLORS = [
+  { body: '#44aaff', fin: '#2288dd' },
+  { body: '#ffaa33', fin: '#dd8811' },
+  { body: '#66ddaa', fin: '#44bb88' },
+  { body: '#ff77aa', fin: '#dd5588' },
+  { body: '#aabb44', fin: '#889922' },
+];
+let fishes = [];
+
+function buildFish() {
+  fishes = [];
+  const count = DENSITIES[densityIdx].fish;
+  for (let i = 0; i < count; i++) {
+    const schoolX = rand(0, W), schoolY = rand(H * 0.15, H * 0.65);
+    const color = FISH_COLORS[Math.floor(rand(0, FISH_COLORS.length))];
+    const dir = Math.random() > 0.5 ? 1 : -1;
+    fishes.push({
+      x: schoolX + rand(-40, 40), y: schoolY + rand(-20, 20),
+      vx: dir * rand(0.3, 1.0), vy: rand(-0.1, 0.1),
+      size: rand(6, 14), color, dir,
+      tailPhase: rand(0, Math.PI * 2),
+    });
+  }
+}
+
+// ═══════════════════════════════
+//  Nemo clownfish (spawned on click)
+// ═══════════════════════════════
+let nemos = [];
+
+function spawnNemo(x, y) {
+  const dir = Math.random() > 0.5 ? 1 : -1;
+  nemos.push({
+    x, y: y - 20,
+    vx: dir * rand(0.8, 2.0), vy: rand(-1, -0.3),
+    size: rand(10, 16),
+    tailPhase: rand(0, Math.PI * 2),
+    life: rand(6, 12),
+    wiggle: 0,
+  });
+}
+
+function handleClick(cx, cy) {
+  // Always spawn bubbles at click
+  const count = Math.floor(rand(5, 12));
+  for (let i = 0; i < count; i++) {
+    bubbles.push({
+      x: cx + rand(-15, 15), y: cy + rand(-10, 10),
+      vx: rand(-0.3, 0.3), vy: rand(-1.5, -3),
+      size: rand(2, 8), alpha: rand(0.4, 0.7),
+    });
+  }
+
+  // Check if clicked near an anemone → also spawn Nemo
+  for (const a of anemones) {
+    const dx = cx - a.x, dy = cy - a.y;
+    if (Math.sqrt(dx * dx + dy * dy) < a.size + 25) {
+      spawnNemo(a.x, a.y);
+      a.swayPhase += 1.5; // jolt
+      break;
+    }
+  }
+}
+
+// ═══════════════════════════════
+//  Coral spawn particles
+// ═══════════════════════════════
+let spawnParticles = [];
+let spawnTimer = 0;
+
+function emitSpawn() {
+  const d = DENSITIES[densityIdx];
+  if (spawnParticles.length > d.spawn * 3) return;
+  // Pick a random coral
+  if (corals.length === 0) return;
+  const c = corals[Math.floor(rand(0, corals.length))];
+  for (let i = 0; i < 3; i++) {
+    spawnParticles.push({
+      x: c.x + rand(-c.size/2, c.size/2),
+      y: c.y - rand(5, c.size),
+      vx: rand(-0.2, 0.2), vy: rand(-0.5, -0.15),
+      size: rand(1.5, 3.5),
+      alpha: rand(0.4, 0.8),
+      color: c.color,
+      life: rand(3, 7),
+    });
+  }
+}
+
+// ═══════════════════════════════
+//  Light rays from surface
+// ═══════════════════════════════
+let lightRays = [];
+
+function buildLightRays() {
+  lightRays = [];
+  for (let i = 0; i < 6; i++) {
+    lightRays.push({
+      x: rand(W * 0.05, W * 0.95),
+      width: rand(30, 80),
+      alpha: rand(0.02, 0.06),
+      speed: rand(0.1, 0.3),
+      phase: rand(0, Math.PI * 2),
+    });
+  }
+}
+
+// ═══════════════════════════════
+//  Bubbles
+// ═══════════════════════════════
+let bubbles = [];
+
+function emitBubble() {
+  if (bubbles.length > 30) return;
+  bubbles.push({
+    x: rand(0, W), y: H + 5,
+    vx: 0, vy: rand(-0.5, -1.5),
+    size: rand(2, 6), alpha: rand(0.2, 0.5),
+  });
+}
+
+// ═══════════════════════════════
+//  Drawing helpers
+// ═══════════════════════════════
+function drawBranch(ctx, branches, ox, oy, parentLen, color, time, depth) {
+  if (!branches) return;
+  branches.forEach((b, i) => {
+    const sway = Math.sin(time * 0.0005 + depth * 0.7 + i * 0.3) * 0.02 * depth;
+    const angle = b.angle + sway;
+    const len = parentLen * b.lenFactor;
+    const ex = ox + Math.cos(angle) * len;
+    const ey = oy + Math.sin(angle) * len;
+    const cpx = ox + Math.cos(angle) * len * 0.5 + b.curve * len * 0.3;
+    const cpy = oy + Math.sin(angle) * len * 0.5;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1, b.thickness);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.quadraticCurveTo(cpx, cpy, ex, ey);
+    ctx.stroke();
+
+    if (b.children) {
+      drawBranch(ctx, b.children, ex, ey, len, color, time, depth + 1);
+    } else {
+      // Leaf tip
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.8;
+      ctx.beginPath(); ctx.arc(ex, ey, 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+  });
+}
+
+function drawCoral(c, time) {
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  ctx.globalAlpha = 0.9;
+  const s = c.size;
+
+  if (c.type === 0) {
+    // ── Tree-like branching coral (like reference photos) ──
+    // Thick trunk
+    ctx.strokeStyle = c.color;
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.globalAlpha = 0.75;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -s * 0.25); ctx.stroke();
+    // Recursive branches
+    ctx.globalAlpha = 0.85;
+    drawBranch(ctx, c.branchData, 0, -s * 0.2, s, c.color, time, 0);
+
+  } else if (c.type === 1) {
+    // ── Brain coral (lumpy dome with grooves) ──
+    // Main dome
+    ctx.fillStyle = c.color;
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath();
+    ctx.ellipse(0, -s * 0.3, s * 0.55, s * 0.45, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Bumpy overlay
+    ctx.globalAlpha = 0.35;
+    c.bumps.forEach(b => {
+      ctx.fillStyle = c.color;
+      ctx.beginPath();
+      ctx.arc(b.dx, -s * 0.3 + b.dy, b.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    // Groove lines (stable)
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.5;
+    for (let i = 0; i < 4; i++) {
+      const gy = -s * 0.3 + (i - 1.5) * s * 0.15;
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.4, gy);
+      ctx.bezierCurveTo(-s * 0.15, gy - 4, s * 0.15, gy + 4, s * 0.4, gy);
+      ctx.stroke();
+    }
+
+  } else {
+    // ── Fan coral (lattice with holes) ──
+    const sway = Math.sin(time * 0.0005) * 2;
+    // Fan shape
+    ctx.fillStyle = c.color;
+    ctx.globalAlpha = 0.65;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.bezierCurveTo(-s*0.5+sway, -s*0.5, -s*0.6+sway, -s*0.9, -s*0.2, -s*1.05);
+    ctx.quadraticCurveTo(sway, -s*1.2, s*0.2, -s*1.05);
+    ctx.bezierCurveTo(s*0.6+sway, -s*0.9, s*0.5+sway, -s*0.5, 0, 0);
+    ctx.fill();
+    // Lattice veins (stable)
+    ctx.strokeStyle = c.color;
+    ctx.globalAlpha = 0.4;
+    ctx.lineWidth = 0.8;
+    // Radial veins
+    for (let v = 0; v < 6; v++) {
+      const a = -Math.PI/2 + (v/5 - 0.5) * 1.2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(a) * s * 0.8 + sway * 0.5, Math.sin(a) * s * 0.9);
+      ctx.stroke();
+    }
+    // Cross veins
+    for (let r = 0.3; r < 1; r += 0.25) {
+      ctx.beginPath();
+      ctx.arc(sway * 0.3, -s * 0.4, s * r * 0.6, Math.PI * 0.15, Math.PI * 0.85);
+      ctx.stroke();
+    }
+    // Stem
+    ctx.strokeStyle = c.color;
+    ctx.globalAlpha = 0.7;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 8); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawSeaweed(sw, time) {
+  ctx.save();
+  ctx.strokeStyle = sw.color;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.globalAlpha = 0.75;
+  ctx.beginPath();
+  ctx.moveTo(sw.x, sw.baseY);
+  const segH = sw.height / sw.segments;
+  for (let s = 1; s <= sw.segments; s++) {
+    const t = s / sw.segments;
+    const sway = Math.sin(time * 0.002 + sw.phase + s * 0.5) * 12 * t + smoothWindX * 8 * t;
+    ctx.lineTo(sw.x + sway, sw.baseY - s * segH);
+  }
+  ctx.stroke();
+  // Leaves
+  ctx.fillStyle = sw.color;
+  ctx.globalAlpha = 0.5;
+  for (let s = 2; s <= sw.segments; s += 2) {
+    const t = s / sw.segments;
+    const sway = Math.sin(time * 0.002 + sw.phase + s * 0.5) * 12 * t + smoothWindX * 8 * t;
+    const lx = sw.x + sway, ly = sw.baseY - s * segH;
+    ctx.beginPath();
+    ctx.ellipse(lx + 6 * (s % 4 === 0 ? 1 : -1), ly, 6, 3, (s%4===0?0.3:-0.3), 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawAnemone(a, time) {
+  ctx.save();
+  ctx.translate(a.x, a.y);
+  // Base
+  ctx.fillStyle = a.color;
+  ctx.globalAlpha = 0.7;
+  ctx.beginPath();
+  ctx.ellipse(0, 5, a.size * 0.45, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Tentacles — stable lengths, very slow sway
+  for (let t = 0; t < a.tentacles; t++) {
+    const spread = (t / a.tentacles - 0.5) * 1.2;
+    const angle = -Math.PI / 2 + spread;
+    // Stable length per tentacle (seeded by index)
+    const lenFactor = 0.75 + ((t * 7 + 3) % 10) / 25; // 0.75–1.15 deterministic
+    const len = a.size * lenFactor;
+    // Very slow, smooth sway — tiny offset between adjacent tentacles
+    const sway = Math.sin(time * 0.0004 + a.swayPhase + t * 0.08) * 5;
+    const tipX = Math.cos(angle) * len + sway;
+    const tipY = Math.sin(angle) * len;
+    ctx.strokeStyle = a.color;
+    ctx.lineWidth = 2.5;
+    ctx.globalAlpha = 0.75;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(tipX * 0.4 + sway * 0.6, tipY * 0.4, tipX, tipY);
+    ctx.stroke();
+    // Tip bulb
+    ctx.fillStyle = '#ffddf0';
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath(); ctx.arc(tipX, tipY, 3, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawFish(f, time) {
+  ctx.save();
+  ctx.translate(f.x, f.y);
+  ctx.scale(f.dir, 1);
+  const s = f.size;
+  const tail = Math.sin(f.tailPhase) * 0.3;
+
+  // Tail
+  ctx.fillStyle = f.color.fin;
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(-s, 0);
+  ctx.lineTo(-s * 1.5, -s * 0.5 + tail * s);
+  ctx.lineTo(-s * 1.5, s * 0.5 + tail * s);
+  ctx.closePath();
+  ctx.fill();
+
+  // Body
+  ctx.fillStyle = f.color.body;
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, s, s * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Eye
+  ctx.fillStyle = '#fff';
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath(); ctx.arc(s * 0.5, -s * 0.1, s * 0.15, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#111';
+  ctx.beginPath(); ctx.arc(s * 0.55, -s * 0.1, s * 0.07, 0, Math.PI*2); ctx.fill();
+
+  ctx.restore();
+}
+
+function drawNemo(n, time) {
+  ctx.save();
+  ctx.translate(n.x, n.y);
+  ctx.scale(n.vx > 0 ? 1 : -1, 1);
+  const s = n.size;
+  const tail = Math.sin(n.tailPhase) * 0.4;
+
+  // Tail
+  ctx.fillStyle = '#ff8833';
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(-s, 0);
+  ctx.lineTo(-s * 1.6, -s * 0.6 + tail * s);
+  ctx.lineTo(-s * 1.6, s * 0.6 + tail * s);
+  ctx.closePath();
+  ctx.fill();
+
+  // Body (orange)
+  ctx.fillStyle = '#ff6622';
+  ctx.globalAlpha = 0.95;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, s, s * 0.55, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // White stripes (Nemo pattern)
+  ctx.fillStyle = '#ffffff';
+  ctx.globalAlpha = 0.9;
+  ctx.fillRect(-s * 0.15, -s * 0.55, s * 0.2, s * 1.1);
+  ctx.fillRect(s * 0.35, -s * 0.45, s * 0.15, s * 0.9);
+  ctx.fillRect(-s * 0.65, -s * 0.4, s * 0.15, s * 0.8);
+
+  // Black edges on stripes
+  ctx.strokeStyle = '#222';
+  ctx.lineWidth = 0.5;
+  ctx.globalAlpha = 0.4;
+  ctx.strokeRect(-s * 0.15, -s * 0.55, s * 0.2, s * 1.1);
+
+  // Eye
+  ctx.fillStyle = '#fff';
+  ctx.globalAlpha = 1;
+  ctx.beginPath(); ctx.arc(s * 0.5, -s * 0.05, s * 0.18, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#111';
+  ctx.beginPath(); ctx.arc(s * 0.55, -s * 0.05, s * 0.09, 0, Math.PI*2); ctx.fill();
+
+  // Dorsal fin
+  ctx.fillStyle = '#ff8833';
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.3, -s * 0.5);
+  ctx.quadraticCurveTo(0, -s * 0.9, s * 0.3, -s * 0.5);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawCrab(c, time) {
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  ctx.scale(c.dir, 1);
+  const s = c.size;
+  const legAnim = Math.sin(c.legPhase);
+
+  ctx.globalAlpha = 0.9;
+
+  // Legs (4 per side)
+  ctx.strokeStyle = c.color;
+  ctx.lineWidth = 1.2;
+  for (let side = -1; side <= 1; side += 2) {
+    for (let l = 0; l < 4; l++) {
+      const la = (l / 3 - 0.5) * 1.0 + side * 0.6;
+      const legLen = s * 0.8;
+      const wiggle = Math.sin(c.legPhase + l * 0.8 + side) * 2;
+      const lx = Math.cos(la) * legLen * 0.5;
+      const ly = side * s * 0.3;
+      const tipX = lx + Math.cos(la) * legLen * 0.5 + wiggle;
+      const tipY = ly + s * 0.4;
+      ctx.beginPath();
+      ctx.moveTo(0, side * s * 0.15);
+      ctx.quadraticCurveTo(lx, ly, tipX, tipY);
+      ctx.stroke();
+    }
+  }
+
+  // Body (oval)
+  ctx.fillStyle = c.color;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, s, s * 0.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Shell highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.beginPath();
+  ctx.ellipse(-s * 0.15, -s * 0.15, s * 0.5, s * 0.3, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Claws
+  const clawOpen = Math.sin(c.clawOpen) * 0.2 + 0.2;
+  for (let side = -1; side <= 1; side += 2) {
+    ctx.fillStyle = c.color;
+    const cx2 = s * 1.1, cy2 = side * s * 0.35;
+    // Arm
+    ctx.strokeStyle = c.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.7, side * s * 0.2);
+    ctx.lineTo(cx2, cy2);
+    ctx.stroke();
+    // Pincer top
+    ctx.beginPath();
+    ctx.moveTo(cx2, cy2);
+    ctx.lineTo(cx2 + s * 0.5, cy2 - s * clawOpen);
+    ctx.lineTo(cx2 + s * 0.3, cy2);
+    ctx.closePath();
+    ctx.fill();
+    // Pincer bottom
+    ctx.beginPath();
+    ctx.moveTo(cx2, cy2);
+    ctx.lineTo(cx2 + s * 0.5, cy2 + s * clawOpen);
+    ctx.lineTo(cx2 + s * 0.3, cy2);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Eyes (on stalks)
+  for (let side = -1; side <= 1; side += 2) {
+    ctx.strokeStyle = c.color;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.4, side * s * 0.15);
+    ctx.lineTo(s * 0.7, side * s * 0.35 - 2);
+    ctx.stroke();
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.arc(s * 0.7, side * s * 0.35 - 2, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(s * 0.72, side * 0.35 * s - 2.5, 0.7, 0, Math.PI * 2); ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// ═══════════════════════════════
+//  Init & Loop
+// ═══════════════════════════════
+function init() {
+  buildScenery();
+  buildFish();
+  buildLightRays();
+}
+
+let lastTime = performance.now();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
+
+  smoothWindX *= WIND_DECAY;
+  smoothWindY *= WIND_DECAY;
+
+  // ── Background gradient (deep ocean) ──
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+  bgGrad.addColorStop(0, '#0a3050');
+  bgGrad.addColorStop(0.3, '#062540');
+  bgGrad.addColorStop(0.7, '#041a2e');
+  bgGrad.addColorStop(1, '#021018');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Light rays from surface ──
+  lightRays.forEach(r => {
+    r.phase += 0.005;
+    const sway = Math.sin(r.phase) * 30 + smoothWindX * 15;
+    const alpha = r.alpha + Math.sin(now * 0.001 + r.phase) * 0.015;
+    const grad = ctx.createLinearGradient(r.x + sway, 0, r.x + sway + r.width * 0.3, H);
+    grad.addColorStop(0, `rgba(120,200,255,${alpha * 2})`);
+    grad.addColorStop(0.5, `rgba(80,180,220,${alpha})`);
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(r.x + sway - r.width / 2, 0);
+    ctx.lineTo(r.x + sway + r.width / 2, 0);
+    ctx.lineTo(r.x + sway + r.width * 0.8 + 20, H);
+    ctx.lineTo(r.x + sway - r.width * 0.3 - 20, H);
+    ctx.closePath();
+    ctx.fill();
+  });
+
+  // ── Sandy ground ──
+  const groundY = H * 0.78;
+  const sandGrad = ctx.createLinearGradient(0, groundY, 0, H);
+  sandGrad.addColorStop(0, '#2a4050');
+  sandGrad.addColorStop(1, '#1a2830');
+  ctx.fillStyle = sandGrad;
+  ctx.fillRect(0, groundY, W, H - groundY);
+  // Sand texture
+  ctx.fillStyle = 'rgba(60,90,100,0.3)';
+  for (let i = 0; i < 40; i++) {
+    ctx.beginPath();
+    ctx.arc(rand(0,W), rand(groundY, H), rand(1,3), 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // ── Seaweeds (behind corals) ──
+  seaweeds.forEach(sw => drawSeaweed(sw, now));
+
+  // ── Corals ──
+  corals.forEach(c => drawCoral(c, now));
+
+  // ── Anemones ──
+  anemones.forEach(a => {
+    a.swayPhase += 0.003;
+    drawAnemone(a, now);
+  });
+
+  // ── Coral spawn particles ──
+  spawnTimer += dt;
+  if (spawnTimer > 0.5) { spawnTimer = 0; emitSpawn(); }
+  ctx.globalAlpha = 1;
+  spawnParticles = spawnParticles.filter(p => {
+    p.x += p.vx + smoothWindX * 2 * dt;
+    p.y += p.vy;
+    p.vy *= 0.998;
+    p.life -= dt;
+    p.alpha -= dt * 0.08;
+    if (p.life <= 0 || p.alpha <= 0) return false;
+    ctx.globalAlpha = p.alpha * 0.6;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    // Glow
+    ctx.globalAlpha = p.alpha * 0.2;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
+    ctx.fill();
+    return true;
+  });
+
+  // ── Fish schools ──
+  ctx.globalAlpha = 1;
+  fishes.forEach(f => {
+    f.tailPhase += 0.08;
+    f.x += f.vx + smoothWindX * 3 * dt;
+    f.y += f.vy + Math.sin(now * 0.002 + f.x * 0.01) * 0.15;
+    // Mouse avoidance
+    const dx = f.x - mousePos.x, dy = f.y - mousePos.y;
+    const dist = Math.sqrt(dx*dx+dy*dy);
+    if (dist < 80 && dist > 0) {
+      f.vx += (dx / dist) * 0.15;
+      f.vy += (dy / dist) * 0.1;
+    }
+    f.vx = clamp(f.vx, -2, 2);
+    f.vy = clamp(f.vy, -0.8, 0.8);
+    f.vy *= 0.99;
+    // Wrap
+    if (f.dir > 0 && f.x > W + 30) f.x = -30;
+    if (f.dir < 0 && f.x < -30) f.x = W + 30;
+    f.dir = f.vx > 0 ? 1 : -1;
+    drawFish(f, now);
+  });
+
+  // ── Nemos ──
+  nemos = nemos.filter(n => {
+    n.life -= dt;
+    if (n.life <= 0) return false;
+    n.tailPhase += 0.12;
+    n.wiggle += 0.05;
+    n.x += n.vx;
+    n.y += n.vy + Math.sin(n.wiggle) * 0.5;
+    n.vy *= 0.995;
+    n.vx *= 0.999;
+    // Mouse curiosity (Nemo approaches mouse slightly)
+    const dx = mousePos.x - n.x, dy = mousePos.y - n.y;
+    const dist = Math.sqrt(dx*dx+dy*dy);
+    if (dist < 150 && dist > 30) {
+      n.vx += (dx / dist) * 0.02;
+      n.vy += (dy / dist) * 0.02;
+    }
+    // Wrap
+    if (n.x > W + 30) n.x = -30;
+    if (n.x < -30) n.x = W + 30;
+    // Fade out near end of life
+    if (n.life < 1) ctx.globalAlpha = n.life;
+    else ctx.globalAlpha = 1;
+    drawNemo(n, now);
+    return true;
+  });
+
+  // ── Crabs ──
+  ctx.globalAlpha = 1;
+  crabs.forEach(c => {
+    c.clawOpen += 0.03;
+    // Pause occasionally
+    c.pauseTimer -= dt;
+    if (c.pauseTimer <= 0) {
+      if (Math.random() < 0.01) {
+        c.pauseTimer = rand(1, 3); // pause 1-3s
+        c.dir *= (Math.random() < 0.3) ? -1 : 1; // sometimes reverse
+      }
+    }
+    if (c.pauseTimer <= 0) {
+      c.x += c.dir * c.speed;
+      c.legPhase += 0.1;
+    }
+    // Wrap
+    if (c.x > W + 20) c.x = -20;
+    if (c.x < -20) c.x = W + 20;
+    drawCrab(c, now);
+  });
+
+  // ── Bubbles ──
+  if (Math.random() < 0.03) emitBubble();
+  ctx.globalAlpha = 1;
+  bubbles = bubbles.filter(b => {
+    b.x += Math.sin(now * 0.003 + b.x) * 0.2 + smoothWindX * 2 * dt;
+    b.y += b.vy;
+    b.alpha -= 0.001;
+    if (b.y < -10 || b.alpha <= 0) return false;
+    ctx.globalAlpha = b.alpha;
+    ctx.strokeStyle = 'rgba(150,220,255,0.6)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
+    ctx.stroke();
+    // Highlight
+    ctx.fillStyle = 'rgba(200,240,255,0.3)';
+    ctx.beginPath();
+    ctx.arc(b.x - b.size * 0.25, b.y - b.size * 0.25, b.size * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    return true;
+  });
+
+  // ── Surface caustics (top shimmer) ──
+  ctx.globalAlpha = 0.04;
+  for (let i = 0; i < 8; i++) {
+    const cx = (now * 0.02 + i * W / 8) % W;
+    const cy = 10 + Math.sin(now * 0.003 + i) * 5;
+    ctx.fillStyle = '#88ccff';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 40 + Math.sin(now*0.002+i)*10, 4, 0, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+init();
+animate();
+</script>
+</body></html>

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; }
+  body { overflow:hidden; background:#050a07; cursor:default; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+/* ═══════════════════════════════
+   夏夜 – Summer Night Fireflies
+   Pure Canvas (no Phaser)
+   ═══════════════════════════════ */
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W = canvas.width = window.innerWidth;
+let H = canvas.height = window.innerHeight;
+window.addEventListener('resize', () => { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; });
+
+let smoothWindX = 0, smoothWindY = 0;
+const WIND_DECAY = 0.92, WIND_GAIN = 1.2;
+let mousePos = { x: -999, y: -999 };
+let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
+
+const DENSITIES = [
+  { label: '螢光點點', count: 20 },
+  { label: '螢火蟲群', count: 50 },
+  { label: '螢河',     count: 120 },
+];
+let densityIdx = 1;
+
+function onMouseMove(d) {
+  mousePos.x = d.x; mousePos.y = d.y;
+  smoothWindX += d.windVX * d.windStrength * WIND_GAIN;
+  smoothWindY += d.windVY * d.windStrength * WIND_GAIN;
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data.type === 'mousemove') onMouseMove(e.data);
+  if (e.data.type === 'time') { currentHour = e.data.hours; currentMin = e.data.minutes; }
+  if (e.data.type === 'density') {
+    densityIdx = (densityIdx + e.data.dir + DENSITIES.length) % DENSITIES.length;
+    buildFireflies();
+    parent.postMessage({ type: 'densityLabel', label: DENSITIES[densityIdx].label }, '*');
+  }
+});
+
+// ── Species: green, yellow-green, yellow, orange ──
+const SPECIES = [
+  { glow: '#4ade80', core: '#ccffcc', flashOn: [0.6, 1.2], flashOff: [1.0, 2.5] },
+  { glow: '#ccdd44', core: '#eeffaa', flashOn: [0.4, 0.8], flashOff: [0.8, 2.0] },
+  { glow: '#ffdd44', core: '#ffffbb', flashOn: [0.3, 0.6], flashOff: [1.0, 3.0] },
+  { glow: '#ff9933', core: '#ffdd99', flashOn: [0.5, 1.0], flashOff: [1.5, 4.0] },
+];
+
+let fireflies = [];
+
+function rand(a, b) { return a + Math.random() * (b - a); }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function buildFireflies() {
+  fireflies = [];
+  const count = DENSITIES[densityIdx].count;
+  for (let i = 0; i < count; i++) {
+    const sp = SPECIES[i % SPECIES.length];
+    const startLit = Math.random() < 0.5;
+    fireflies.push({
+      x: rand(0, W), y: rand(H * 0.1, H),
+      vx: rand(-0.3, 0.3), vy: rand(-0.3, 0.3),
+      sp,
+      glowR: rand(15, 35),
+      coreR: rand(2, 5),
+      state: startLit ? 'on' : 'off',
+      stateTimer: startLit ? rand(0.2, sp.flashOn[1]) : rand(0, 1.0),
+      brightness: startLit ? rand(0.6, 1) : 0,
+      flashDur: rand(sp.flashOn[0], sp.flashOn[1]),
+      darkDur: rand(sp.flashOff[0], sp.flashOff[1]),
+    });
+  }
+}
+
+// ── Moon ──
+function getMoonPos() {
+  const t = currentHour + currentMin / 60;
+  const prog = ((t < 12 ? t + 24 : t) - 18) / 12;
+  const p = clamp(prog, 0, 1);
+  return {
+    x: W * 0.1 + p * W * 0.8,
+    y: H * 0.08 + Math.sin(p * Math.PI) * (-H * 0.05),
+    alpha: p > 0 && p < 1 ? 0.5 : 0.1,
+  };
+}
+
+// ── Draw ──
+let lastTime = performance.now();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
+
+  smoothWindX *= WIND_DECAY;
+  smoothWindY *= WIND_DECAY;
+
+  // Background
+  ctx.fillStyle = '#050a07';
+  ctx.fillRect(0, 0, W, H);
+  // Subtle gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(5,10,7,1)');
+  grad.addColorStop(1, 'rgba(10,26,14,1)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Moon
+  const mp = getMoonPos();
+  ctx.globalAlpha = mp.alpha * 0.08;
+  const moonGrad = ctx.createRadialGradient(mp.x, mp.y, 0, mp.x, mp.y, 45);
+  moonGrad.addColorStop(0, '#cce8cc');
+  moonGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = moonGrad;
+  ctx.fillRect(mp.x - 50, mp.y - 50, 100, 100);
+  ctx.globalAlpha = mp.alpha;
+  ctx.fillStyle = '#cce8cc';
+  ctx.beginPath();
+  ctx.arc(mp.x, mp.y, 15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Fireflies
+  fireflies.forEach(f => {
+    // ── State machine ──
+    f.stateTimer -= dt;
+    if (f.stateTimer <= 0) {
+      switch (f.state) {
+        case 'off':
+          f.state = 'rising'; f.stateTimer = 0.12;
+          break;
+        case 'rising':
+          f.state = 'on'; f.stateTimer = f.flashDur;
+          break;
+        case 'on':
+          f.state = 'falling'; f.stateTimer = 0.3;
+          break;
+        case 'falling':
+          f.state = 'off';
+          f.darkDur = rand(f.sp.flashOff[0], f.sp.flashOff[1]);
+          f.flashDur = rand(f.sp.flashOn[0], f.sp.flashOn[1]);
+          f.stateTimer = f.darkDur;
+          break;
+      }
+    }
+
+    // Brightness
+    if (f.state === 'rising') {
+      f.brightness = Math.min(1, f.brightness + dt / 0.12);
+    } else if (f.state === 'on') {
+      f.brightness = 0.8 + Math.sin(now * 0.015 + f.x) * 0.2;
+    } else if (f.state === 'falling') {
+      f.brightness = Math.max(0, f.brightness - dt / 0.3);
+    } else {
+      f.brightness *= 0.9;
+    }
+
+    // Movement
+    f.vx += smoothWindX * 0.06 * dt + rand(-0.01, 0.01);
+    f.vy += smoothWindY * 0.06 * dt + rand(-0.01, 0.01);
+
+    // Mouse repulsion
+    const dx = f.x - mousePos.x;
+    const dy = f.y - mousePos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 120 && dist > 0) {
+      f.vx += (dx / dist) * 0.1;
+      f.vy += (dy / dist) * 0.1;
+    }
+
+    f.vx = clamp(f.vx, -1.2, 1.2);
+    f.vy = clamp(f.vy, -1.2, 1.2);
+    f.x += f.vx;
+    f.y += f.vy;
+
+    // Wrap
+    if (f.x < -20) f.x = W + 20;
+    if (f.x > W + 20) f.x = -20;
+    if (f.y < -20) f.y = H + 20;
+    if (f.y > H + 20) f.y = -20;
+
+    // ── Draw ──
+    const b = f.brightness;
+    if (b > 0.02) {
+      // Outer glow
+      ctx.globalAlpha = b * 0.35;
+      const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.glowR);
+      g.addColorStop(0, f.sp.glow);
+      g.addColorStop(1, 'transparent');
+      ctx.fillStyle = g;
+      ctx.fillRect(f.x - f.glowR, f.y - f.glowR, f.glowR * 2, f.glowR * 2);
+
+      // Core
+      ctx.globalAlpha = b * 0.9;
+      ctx.fillStyle = f.sp.core;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.coreR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bright center
+      ctx.globalAlpha = b * 0.6;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.coreR * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Tiny dim dot when off
+      ctx.globalAlpha = 0.06;
+      ctx.fillStyle = f.sp.core;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+
+  ctx.globalAlpha = 1;
+}
+
+buildFireflies();
+animate();
+</script>
+</body></html>

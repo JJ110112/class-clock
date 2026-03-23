@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; }
+  body { overflow:hidden; background: linear-gradient(180deg, #4ab0e8 0%, #87ceeb 50%, #b0e0f8 100%); cursor:default; }
+</style>
+</head>
+<body>
+<script src="../phaser.min.js"></script>
+<script>
+/* ═══════════════════════════════
+   夏日海灘 – Summer Beach
+   ═══════════════════════════════ */
+
+let smoothWindX = 0, smoothWindY = 0;
+const WIND_DECAY = 0.90, WIND_GAIN = 1.2;
+let mousePos = { x: -999, y: -999 };
+let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
+
+const DENSITIES = [
+  { label: '微風徐徐', waves: 4,  seagulls: 2,  sparkles: 15 },
+  { label: '海風吹拂', waves: 7,  seagulls: 5,  sparkles: 35 },
+  { label: '浪花朵朵', waves: 12, seagulls: 8,  sparkles: 60 },
+];
+let densityIdx = 1;
+let scene = null;
+
+function onMouseMove(d) {
+  mousePos.x = d.x; mousePos.y = d.y;
+  smoothWindX += d.windVX * d.windStrength * WIND_GAIN;
+  smoothWindY += d.windVY * d.windStrength * WIND_GAIN;
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data.type === 'mousemove') onMouseMove(e.data);
+  if (e.data.type === 'time') { currentHour = e.data.hours; currentMin = e.data.minutes; }
+  if (e.data.type === 'density') {
+    densityIdx = (densityIdx + e.data.dir + DENSITIES.length) % DENSITIES.length;
+    if (scene) scene.rebuild();
+    parent.postMessage({ type: 'densityLabel', label: DENSITIES[densityIdx].label }, '*');
+  }
+});
+
+const W = window.innerWidth, H = window.innerHeight;
+
+function getSunPos() {
+  const t = currentHour + currentMin / 60;
+  const prog = (t - 6) / 12;
+  const p = Phaser.Math.Clamp(prog, 0, 1);
+  return {
+    x: Phaser.Math.Linear(W * 0.12, W * 0.88, p),
+    y: H * 0.18 - Math.sin(p * Math.PI) * H * 0.1,
+    alpha: p > 0 && p < 1 ? 1.0 : 0.2,
+  };
+}
+
+class SummerBeachScene extends Phaser.Scene {
+  constructor() { super('summer-beach'); }
+
+  create() {
+    scene = this;
+
+    // ── Sky ──
+    const bg = this.add.graphics().setDepth(-10);
+    bg.fillGradientStyle(0x3a9ee0, 0x4ab0e8, 0x7ac4ee, 0xb0e0f8, 1);
+    bg.fillRect(0, 0, W, H);
+
+    // ── Sun (drawn in update) ──
+    this.sunG = this.add.graphics().setDepth(-5);
+
+    // ── Distant ocean horizon ──
+    this.oceanY = H * 0.50;
+    const ocean = this.add.graphics().setDepth(1);
+    // Deep ocean
+    ocean.fillGradientStyle(0x1888cc, 0x20a0dd, 0x0e6eaa, 0x085090, 1);
+    ocean.fillRect(0, this.oceanY, W, H * 0.22);
+
+    // ── Shore foam zone ──
+    this.foamG = this.add.graphics().setDepth(1.3);
+
+    // ── Wet sand ──
+    const wetSand = this.add.graphics().setDepth(1.5);
+    wetSand.fillGradientStyle(0xc8a870, 0xc0a060, 0xdcc090, 0xd4b888, 1);
+    wetSand.fillRect(0, H * 0.70, W, H * 0.06);
+
+    // ── Beach sand ──
+    const sand = this.add.graphics().setDepth(2);
+    sand.fillGradientStyle(0xf5deb3, 0xf0d8a0, 0xeedcb0, 0xe8cc88, 1);
+    sand.fillRect(0, H * 0.74, W, H * 0.26);
+    // Sand texture dots
+    for (let i = 0; i < 80; i++) {
+      const sx = Phaser.Math.Between(0, W);
+      const sy = Phaser.Math.FloatBetween(H * 0.75, H * 0.98);
+      sand.fillStyle(0xd4b888, Phaser.Math.FloatBetween(0.2, 0.5));
+      sand.fillCircle(sx, sy, Phaser.Math.FloatBetween(1, 3));
+    }
+
+    // ── Palm trees (dynamic leaves) ──
+    this.palms = [];
+    this.palmLeafG = this.add.graphics().setDepth(3.5);
+    this.addPalm(W * 0.08, H * 0.76, 1.0);
+    this.addPalm(W * 0.92, H * 0.80, 0.85);
+    this.addPalm(W * 0.18, H * 0.82, 0.7);
+
+    // ── Umbrella + chair ──
+    this.drawUmbrella(W * 0.65, H * 0.72);
+    this.drawUmbrella(W * 0.45, H * 0.78, 0x2288dd, 0xffffff);
+
+    // ── Surfboard ──
+    this.drawSurfboard(W * 0.35, H * 0.74);
+
+    // ── Beach ball ──
+    this.drawBeachBall(W * 0.75, H * 0.84);
+
+    // ── Starfish & shells on sand ──
+    this.drawStarfish(W * 0.55, H * 0.88);
+    this.drawShell(W * 0.3, H * 0.92);
+    this.drawShell(W * 0.82, H * 0.90);
+
+    // ── Clouds ──
+    this.clouds = [];
+
+    // ── Wave lines ──
+    this.waveG = this.add.graphics().setDepth(1.6);
+
+    // ── Seagulls ──
+    this.seagulls = [];
+
+    // ── Water sparkles ──
+    this.sparkles = [];
+
+    // ── Palm leaf sway (for animation) ──
+    this.palmLeaves = [];
+
+    this.rebuild();
+  }
+
+  addPalm(x, baseY, scale) {
+    const s = scale || 1;
+    const g = this.add.graphics().setDepth(3);
+    const trunkH = 130 * s;
+    const topX = x + 8 * s;
+    const topY = baseY - trunkH;
+
+    // Trunk (static)
+    g.lineStyle(8 * s, 0x8B6914, 1);
+    g.beginPath();
+    g.moveTo(x, baseY);
+    for (let t = 0; t <= 1; t += 0.05) {
+      const px = x + Math.sin(t * 1.5) * 12 * s;
+      const py = baseY - t * trunkH;
+      g.lineTo(px, py);
+    }
+    g.strokePath();
+    g.lineStyle(6 * s, 0x7a5c12, 1);
+    for (let t = 0.1; t < 1; t += 0.12) {
+      const px = x + Math.sin(t * 1.5) * 12 * s;
+      const py = baseY - t * trunkH;
+      g.lineBetween(px - 4 * s, py, px + 4 * s, py);
+    }
+    // Coconuts
+    g.fillStyle(0x5a3a0a, 1);
+    g.fillCircle(topX - 3 * s, topY + 6 * s, 5 * s);
+    g.fillCircle(topX + 5 * s, topY + 4 * s, 4.5 * s);
+    g.fillCircle(topX + 1 * s, topY + 10 * s, 4 * s);
+
+    // Store frond data for dynamic redraw
+    const fronds = [];
+    const angles = [-2.8, -2.2, -1.6, -1.0, -0.4, 0.2, 0.8, 1.4, 2.0, 2.6];
+    angles.forEach(a => {
+      fronds.push({ angle: a, len: (55 + Math.random() * 25) * s });
+    });
+    this.palms.push({ topX, topY, s, fronds, swayOffset: 0 });
+  }
+
+  drawPalmLeaves(time) {
+    const g = this.palmLeafG;
+    g.clear();
+    const mouseInfluenceR = 150;
+
+    this.palms.forEach(palm => {
+      // Mouse proximity → sway
+      const dx = mousePos.x - palm.topX;
+      const dy = mousePos.y - palm.topY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const mouseNear = dist < mouseInfluenceR ? (1 - dist / mouseInfluenceR) : 0;
+      // Sway direction: push leaves away from mouse
+      const pushDir = dist > 0 ? dx / dist : 0;
+      const targetSway = mouseNear * pushDir * 0.5;
+      palm.swayOffset += (targetSway - palm.swayOffset) * 0.08;
+      // Also add wind
+      const windSway = smoothWindX * 0.03;
+      const totalSway = palm.swayOffset + windSway;
+
+      palm.fronds.forEach(f => {
+        const a = f.angle + totalSway;
+        // Stem
+        g.lineStyle(2.5 * palm.s, 0x1a8a1a, 0.9);
+        g.beginPath();
+        g.moveTo(palm.topX, palm.topY);
+        for (let t = 0; t <= 1; t += 0.08) {
+          const droop = t * t * 35 * palm.s;
+          const sway = Math.sin(time * 0.002 + f.angle) * 3 * palm.s * (0.3 + mouseNear * 0.7);
+          const lx = palm.topX + Math.cos(a) * t * f.len + sway * t;
+          const ly = palm.topY + Math.sin(a) * t * f.len * 0.3 + droop;
+          g.lineTo(lx, ly);
+        }
+        g.strokePath();
+        // Leaf blades
+        g.fillStyle(0x28a828, 0.65);
+        for (let t = 0.25; t <= 0.95; t += 0.12) {
+          const droop = t * t * 35 * palm.s;
+          const sway = Math.sin(time * 0.002 + f.angle) * 3 * palm.s * (0.3 + mouseNear * 0.7);
+          const lx = palm.topX + Math.cos(a) * t * f.len + sway * t;
+          const ly = palm.topY + Math.sin(a) * t * f.len * 0.3 + droop;
+          g.fillEllipse(lx, ly, 3 * palm.s, 8 * palm.s);
+        }
+      });
+    });
+  }
+
+  drawUmbrella(x, baseY, color1, color2) {
+    const c1 = color1 || 0xff4444, c2 = color2 || 0xffffff;
+    const g = this.add.graphics().setDepth(4);
+    // Pole
+    g.lineStyle(3, 0x8B6520, 1);
+    g.lineBetween(x, baseY + 8, x, baseY - H * 0.12);
+    // Canopy
+    const r = H * 0.07;
+    const cy = baseY - H * 0.12;
+    // Draw striped canopy
+    const slices = 8;
+    for (let i = 0; i < slices; i++) {
+      const startA = Math.PI + (i / slices) * Math.PI;
+      const endA = Math.PI + ((i + 1) / slices) * Math.PI;
+      g.fillStyle(i % 2 === 0 ? c1 : c2, 1);
+      g.slice(x, cy, r, startA, endA, false);
+      g.fillPath();
+    }
+    // Pole tip
+    g.fillStyle(c1, 1);
+    g.fillCircle(x, cy - r + 2, 3);
+    // Chair
+    g.fillStyle(0xd4a66a, 1);
+    g.fillRect(x - 16, baseY - 5, 32, 3);
+    g.lineStyle(2, 0xc49050, 1);
+    g.lineBetween(x - 12, baseY - 5, x - 16, baseY + 10);
+    g.lineBetween(x + 12, baseY - 5, x + 16, baseY + 10);
+    g.lineBetween(x + 12, baseY - 5, x + 16, baseY - 22);
+    // Back rest fabric
+    g.fillStyle(c1, 0.6);
+    g.fillRect(x + 12, baseY - 22, 5, 18);
+  }
+
+  drawSurfboard(x, y) {
+    const g = this.add.graphics().setDepth(4);
+    // Leaning angle
+    g.save && g.save();
+    g.fillStyle(0x00bcd4, 0.95);
+    g.fillEllipse(x, y, 14, 55);
+    g.fillStyle(0xffffff, 0.4);
+    g.fillEllipse(x - 2, y - 10, 6, 20);
+    // Stripe
+    g.fillStyle(0xff6600, 0.7);
+    g.fillRect(x - 6, y - 2, 12, 3);
+  }
+
+  drawBeachBall(x, y) {
+    const g = this.add.graphics().setDepth(5);
+    const r = 12;
+    g.fillStyle(0xff4444, 1);
+    g.fillCircle(x, y, r);
+    // White stripe
+    g.fillStyle(0xffffff, 0.85);
+    g.fillEllipse(x, y, r * 0.5, r * 2);
+    // Blue top
+    g.fillStyle(0x2266ee, 0.6);
+    g.fillEllipse(x, y - r * 0.4, r * 1.5, r * 0.5);
+    // Highlight
+    g.fillStyle(0xffffff, 0.4);
+    g.fillCircle(x - 3, y - 4, 4);
+  }
+
+  drawStarfish(x, y) {
+    const g = this.add.graphics().setDepth(4);
+    g.fillStyle(0xe06030, 0.8);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+      const tx = x + Math.cos(a) * 12;
+      const ty = y + Math.sin(a) * 12;
+      g.fillEllipse(tx, ty, 5, 12);
+    }
+    g.fillCircle(x, y, 5);
+  }
+
+  drawShell(x, y) {
+    const g = this.add.graphics().setDepth(4);
+    g.fillStyle(0xf0d0b0, 0.85);
+    g.fillEllipse(x, y, 10, 7);
+    g.lineStyle(1, 0xc0a080, 0.5);
+    for (let i = -3; i <= 3; i++) {
+      g.lineBetween(x, y + 3, x + i * 2.5, y - 4);
+    }
+  }
+
+  rebuild() {
+    this.clouds.forEach(c => c.g.destroy());
+    this.seagulls.forEach(s => s.g.destroy());
+    this.sparkles.forEach(s => s.g.destroy());
+    const d = DENSITIES[densityIdx];
+
+    // Clouds
+    this.clouds = [];
+    for (let i = 0; i < 5; i++) {
+      const x = Phaser.Math.Between(0, W);
+      const y = Phaser.Math.Between(H * 0.03, H * 0.22);
+      const g = this.add.graphics().setDepth(0);
+      g.fillStyle(0xffffff, 0.88);
+      const cw = Phaser.Math.Between(90, 160), ch = Phaser.Math.Between(28, 45);
+      g.fillEllipse(0, 0, cw, ch);
+      g.fillEllipse(-cw * 0.3, -ch * 0.2, cw * 0.6, ch * 0.7);
+      g.fillEllipse(cw * 0.25, -ch * 0.15, cw * 0.5, ch * 0.6);
+      g.setPosition(x, y);
+      this.clouds.push({ g, speed: Phaser.Math.FloatBetween(0.1, 0.4) });
+    }
+
+    // Seagulls (random direction, mouse-aware)
+    this.seagulls = [];
+    for (let i = 0; i < d.seagulls; i++) {
+      const x = Phaser.Math.Between(0, W);
+      const y = Phaser.Math.Between(H * 0.06, H * 0.35);
+      const dir = Math.random() > 0.5 ? 1 : -1;
+      const g = this.add.graphics().setPosition(x, y).setDepth(6);
+      this.seagulls.push({
+        g, dir,
+        vx: dir * Phaser.Math.FloatBetween(0.3, 1.0),
+        vy: Phaser.Math.FloatBetween(-0.1, 0.1),
+        wingPhase: Phaser.Math.FloatBetween(0, Math.PI * 2),
+        wingSpeed: Phaser.Math.FloatBetween(0.04, 0.08),
+        fleeVX: 0, fleeVY: 0,
+      });
+    }
+
+    // Sparkles on water
+    this.sparkles = [];
+    for (let i = 0; i < d.sparkles; i++) {
+      const x = Phaser.Math.Between(0, W);
+      const y = Phaser.Math.FloatBetween(this.oceanY + 5, this.oceanY + H * 0.18);
+      const g = this.add.circle(x, y, Phaser.Math.FloatBetween(1.5, 3.5), 0xffffff, 0).setDepth(1.8);
+      this.sparkles.push({
+        g, phase: Phaser.Math.FloatBetween(0, Math.PI * 2),
+        speed: Phaser.Math.FloatBetween(0.03, 0.08),
+      });
+    }
+
+    this.waveCount = d.waves;
+  }
+
+  update(time, delta) {
+    const dt = delta / 1000;
+    smoothWindX *= WIND_DECAY;
+    smoothWindY *= WIND_DECAY;
+
+    // ── Sun (big, visible) ──
+    const sp = getSunPos();
+    this.sunG.clear();
+    // Outer glow
+    this.sunG.fillStyle(0xfff59d, sp.alpha * 0.08);
+    this.sunG.fillCircle(sp.x, sp.y, 120);
+    // Mid glow
+    this.sunG.fillStyle(0xffee58, sp.alpha * 0.2);
+    this.sunG.fillCircle(sp.x, sp.y, 70);
+    // Inner glow
+    this.sunG.fillStyle(0xfff176, sp.alpha * 0.45);
+    this.sunG.fillCircle(sp.x, sp.y, 45);
+    // Core
+    this.sunG.fillStyle(0xfff9c4, sp.alpha);
+    this.sunG.fillCircle(sp.x, sp.y, 30);
+    // Highlight
+    this.sunG.fillStyle(0xffffff, sp.alpha * 0.5);
+    this.sunG.fillCircle(sp.x - 8, sp.y - 8, 12);
+
+    // ── Clouds drift ──
+    this.clouds.forEach(c => {
+      c.g.x += c.speed + smoothWindX * 12 * dt;
+      if (c.g.x > W + 140) c.g.x = -140;
+      if (c.g.x < -180) c.g.x = W + 140;
+    });
+
+    // ── Shore foam (animated) ──
+    this.foamG.clear();
+    const foamY = H * 0.695;
+    for (let layer = 0; layer < 3; layer++) {
+      const ly = foamY + layer * 6;
+      const alpha = 0.5 - layer * 0.12;
+      this.foamG.fillStyle(0xffffff, alpha);
+      for (let x = 0; x < W; x += 6) {
+        const surge = Math.sin((x * 0.02 + time * 0.0015 + layer * 1.5)) * 8 + Math.sin(x * 0.05 + time * 0.003) * 3;
+        this.foamG.fillRect(x, ly + surge, 6, 3);
+      }
+    }
+
+    // ── Wave lines (visible, thicker) ──
+    this.waveG.clear();
+    for (let i = 0; i < this.waveCount; i++) {
+      const wy = this.oceanY + 10 + i * (H * 0.18 / this.waveCount);
+      const alpha = 0.5 - i * 0.03;
+      const thick = 3 - i * 0.15;
+      this.waveG.lineStyle(Math.max(1, thick), 0xffffff, alpha);
+      this.waveG.beginPath();
+      const amp = 6 + i * 0.5;
+      const freq = 0.012 - i * 0.0005;
+      for (let x = 0; x <= W; x += 4) {
+        const yOff = Math.sin((x + time * (0.03 + i * 0.005) + i * 120 + smoothWindX * 15) * freq) * amp;
+        if (x === 0) this.waveG.moveTo(x, wy + yOff);
+        else this.waveG.lineTo(x, wy + yOff);
+      }
+      this.waveG.strokePath();
+    }
+
+    // ── Palm leaves (dynamic sway) ──
+    this.drawPalmLeaves(time);
+
+    // ── Seagulls (flee mouse, random direction) ──
+    const avoidR = 120;
+    this.seagulls.forEach(s => {
+      // Mouse avoidance
+      const dx = s.g.x - mousePos.x;
+      const dy = s.g.y - mousePos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < avoidR && dist > 0) {
+        const force = (1 - dist / avoidR) * 3;
+        s.fleeVX += (dx / dist) * force;
+        s.fleeVY += (dy / dist) * force;
+        s.wingSpeed = 0.12; // flap faster when scared
+      } else {
+        s.wingSpeed = Phaser.Math.Linear(s.wingSpeed, Phaser.Math.FloatBetween(0.04, 0.08), 0.02);
+      }
+      s.fleeVX *= 0.94; s.fleeVY *= 0.94;
+
+      s.g.x += s.vx + s.fleeVX + smoothWindX * 8 * dt;
+      s.g.y += s.vy + s.fleeVY;
+
+      // Keep in bounds
+      if (s.g.y < -20) s.g.y = -20;
+      if (s.g.y > H * 0.4) s.vy = -Math.abs(s.vy);
+      if (s.g.y < H * 0.03) s.vy = Math.abs(s.vy);
+
+      // Wrap around
+      if (s.dir > 0 && s.g.x > W + 50) { s.g.x = -50; s.g.y = Phaser.Math.Between(H * 0.06, H * 0.35); }
+      if (s.dir < 0 && s.g.x < -50) { s.g.x = W + 50; s.g.y = Phaser.Math.Between(H * 0.06, H * 0.35); }
+
+      s.wingPhase += s.wingSpeed;
+      const wingY = Math.sin(s.wingPhase) * 6;
+      const facing = s.vx + s.fleeVX > 0 ? 1 : -1;
+      s.g.clear();
+      s.g.lineStyle(2.5, 0x2a2a2a, 0.75);
+      s.g.beginPath();
+      s.g.moveTo(-10 * facing, wingY);
+      s.g.lineTo(-3 * facing, wingY * 0.3);
+      s.g.lineTo(0, 0);
+      s.g.lineTo(3 * facing, wingY * 0.3);
+      s.g.lineTo(10 * facing, wingY);
+      s.g.strokePath();
+    });
+
+    // ── Water sparkles ──
+    this.sparkles.forEach(s => {
+      s.phase += s.speed;
+      s.g.alpha = (Math.sin(s.phase) + 1) / 2 * 0.85 + 0.1;
+    });
+  }
+}
+
+new Phaser.Game({
+  type: Phaser.AUTO, width: W, height: H, transparent: true,
+  scene: SummerBeachScene, banner: false,
+  scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
+});
+</script>
+</body></html>

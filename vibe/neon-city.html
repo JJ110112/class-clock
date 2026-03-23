@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; }
+  body { overflow:hidden; background:#08060f; cursor:default; }
+</style>
+</head>
+<body>
+<script src="../phaser.min.js"></script>
+<script>
+/* ═══════════════════════════════
+   霓虹都市 – Neon City
+   ═══════════════════════════════ */
+
+let smoothWindX = 0, smoothWindY = 0;
+const WIND_DECAY = 0.92, WIND_GAIN = 0.8;
+let mousePos = { x: -999, y: -999 };
+let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
+
+const DENSITIES = [
+  { label: '安靜巷弄', beams: 8,  sparks: 15 },
+  { label: '霓虹大道', beams: 18, sparks: 40 },
+  { label: '賽博龐克', beams: 35, sparks: 90 },
+];
+let densityIdx = 1;
+let scene = null;
+
+function onMouseMove(d) {
+  mousePos.x = d.x; mousePos.y = d.y;
+  smoothWindX += d.windVX * d.windStrength * WIND_GAIN;
+  smoothWindY += d.windVY * d.windStrength * WIND_GAIN;
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data.type === 'mousemove') onMouseMove(e.data);
+  if (e.data.type === 'time') { currentHour = e.data.hours; currentMin = e.data.minutes; }
+  if (e.data.type === 'density') {
+    densityIdx = (densityIdx + e.data.dir + DENSITIES.length) % DENSITIES.length;
+    if (scene) scene.rebuild();
+    parent.postMessage({ type: 'densityLabel', label: DENSITIES[densityIdx].label }, '*');
+  }
+});
+
+const W = window.innerWidth, H = window.innerHeight;
+const NEON_COLORS = [0xff00ff, 0x00ffff, 0x8b5cf6, 0x3b82f6, 0xff3399, 0x06b6d4, 0xe040fb];
+
+// Moon arc: 18h rise left → 0h top → 6h set right
+function getMoonPos() {
+  const t = currentHour + currentMin / 60;
+  const prog = ((t < 12 ? t + 24 : t) - 18) / 12;
+  const p = Phaser.Math.Clamp(prog, 0, 1);
+  return {
+    x: Phaser.Math.Linear(W * 0.1, W * 0.9, p),
+    y: H * 0.06 + Math.sin(p * Math.PI) * (-H * 0.03),
+    alpha: p > 0 && p < 1 ? 0.6 : 0.1,
+  };
+}
+
+class NeonCityScene extends Phaser.Scene {
+  constructor() { super('neon-city'); }
+
+  create() {
+    scene = this;
+
+    // ── Dark city background ──
+    const bg = this.add.graphics().setDepth(-10);
+    bg.fillGradientStyle(0x08060f, 0x0a0818, 0x0c0a1a, 0x060412, 1);
+    bg.fillRect(0, 0, W, H);
+
+    // ── Moon ──
+    this.moonGlowOuter = this.add.circle(0, 0, 60, 0xc8b0e8, 0.04).setDepth(-4);
+    this.moonGlow = this.add.circle(0, 0, 35, 0xd0c0f0, 0.08).setDepth(-3);
+    this.moon = this.add.circle(0, 0, 16, 0xe0d8f0, 0.6).setDepth(-2);
+    // Moon neon tint
+    this.moonNeon = this.add.circle(0, 0, 22, 0xe040fb, 0.06).setDepth(-1);
+
+    // ── Buildings silhouette (static) ──
+    this.buildingsG = this.add.graphics().setDepth(0);
+    // ── Window lights (redrawn each frame) ──
+    this.windowsG = this.add.graphics().setDepth(0.5);
+    this.windows = []; // {x, y, w, h, color}
+    this.drawBuildings();
+
+    // ── Wet ground reflection ──
+    this.groundG = this.add.graphics().setDepth(1);
+    this.groundG.fillStyle(0x0a0818, 1);
+    this.groundG.fillRect(0, H * 0.78, W, H * 0.22);
+    this.groundG.fillGradientStyle(0x1a1030, 0x1a1030, 0x08060f, 0x08060f, 0.4);
+    this.groundG.fillRect(0, H * 0.78, W, H * 0.04);
+
+    // ── Neon beams, sparks, reflections ──
+    this.beams = [];
+    this.sparks = [];
+    this.reflections = [];
+    this.rebuild();
+
+    // ── Fog layers ──
+    this.fog1 = this.add.graphics().setDepth(8);
+    this.fog2 = this.add.graphics().setDepth(9);
+  }
+
+  drawBuildings() {
+    const g = this.buildingsG;
+    this.windows = [];
+    const count = Math.ceil(W / 60) + 2;
+    for (let i = 0; i < count; i++) {
+      const bx = i * (W / count);
+      const bw = Phaser.Math.Between(40, 80);
+      const bh = Phaser.Math.Between(H * 0.25, H * 0.65);
+      const shade = Phaser.Math.Between(8, 20);
+      const color = Phaser.Display.Color.GetColor(shade, shade, shade + 10);
+      g.fillStyle(color, 1);
+      g.fillRect(bx, H * 0.78 - bh, bw, bh);
+      // Store window positions for dynamic lighting
+      const winColor = Phaser.Utils.Array.GetRandom(NEON_COLORS);
+      for (let wy = H * 0.78 - bh + 8; wy < H * 0.78 - 10; wy += 14) {
+        for (let wx = bx + 6; wx < bx + bw - 8; wx += 12) {
+          if (Math.random() > 0.4) {
+            this.windows.push({
+              x: wx, y: wy, w: 5, h: 7,
+              color: winColor,
+              baseAlpha: Phaser.Math.FloatBetween(0.03, 0.12),
+            });
+          }
+        }
+      }
+    }
+  }
+
+  drawWindows() {
+    const g = this.windowsG;
+    g.clear();
+    const mx = mousePos.x, my = mousePos.y;
+    const radius = 220; // influence radius
+    this.windows.forEach(win => {
+      const dx = (win.x + win.w / 2) - mx;
+      const dy = (win.y + win.h / 2) - my;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const proximity = Math.max(0, 1 - dist / radius);
+      const alpha = win.baseAlpha + proximity * 0.6;
+      // Glow halo when close
+      if (proximity > 0.1) {
+        g.fillStyle(win.color, proximity * 0.15);
+        g.fillRect(win.x - 2, win.y - 2, win.w + 4, win.h + 4);
+      }
+      g.fillStyle(win.color, alpha);
+      g.fillRect(win.x, win.y, win.w, win.h);
+    });
+  }
+
+  rebuild() {
+    this.beams.forEach(b => b.g.destroy());
+    this.sparks.forEach(s => s.g.destroy());
+    this.reflections.forEach(r => r.g.destroy());
+    const d = DENSITIES[densityIdx];
+
+    // Neon beams
+    this.beams = [];
+    for (let i = 0; i < d.beams; i++) {
+      const x = Phaser.Math.Between(20, W - 20);
+      const top = Phaser.Math.Between(H * 0.08, H * 0.4);
+      const len = Phaser.Math.Between(H * 0.15, H * 0.5);
+      const color = Phaser.Utils.Array.GetRandom(NEON_COLORS);
+      const w = Phaser.Math.FloatBetween(2, 5);
+      const g = this.add.graphics().setDepth(3);
+      this.beams.push({ g, x, top, len, w, color, phase: Math.random() * Math.PI * 2, speed: Phaser.Math.FloatBetween(0.008, 0.025) });
+
+      const rg = this.add.graphics().setDepth(2);
+      this.reflections.push({ g: rg, x, w: w * 3, color });
+    }
+
+    // Sparks
+    this.sparks = [];
+    for (let i = 0; i < d.sparks; i++) {
+      const x = Phaser.Math.Between(0, W);
+      const y = Phaser.Math.Between(H * 0.1, H * 0.85);
+      const color = Phaser.Utils.Array.GetRandom(NEON_COLORS);
+      const g = this.add.circle(x, y, Phaser.Math.FloatBetween(1, 3), color, 0).setDepth(7);
+      this.sparks.push({
+        g, vy: Phaser.Math.FloatBetween(-0.8, -0.1),
+        phase: Math.random() * Math.PI * 2,
+        pulseSpeed: Phaser.Math.FloatBetween(0.02, 0.06),
+      });
+    }
+  }
+
+  update(time, delta) {
+    const dt = delta / 1000;
+    smoothWindX *= WIND_DECAY;
+    smoothWindY *= WIND_DECAY;
+
+    // ── Moon follows time ──
+    const mp = getMoonPos();
+    this.moon.x = Phaser.Math.Linear(this.moon.x, mp.x, 0.02);
+    this.moon.y = Phaser.Math.Linear(this.moon.y, mp.y, 0.02);
+    this.moon.alpha = mp.alpha;
+    this.moonGlow.setPosition(this.moon.x, this.moon.y);
+    this.moonGlow.alpha = mp.alpha * 0.12;
+    this.moonGlowOuter.setPosition(this.moon.x, this.moon.y);
+    this.moonGlowOuter.alpha = mp.alpha * 0.06;
+    this.moonNeon.setPosition(this.moon.x, this.moon.y);
+    // Neon tint pulses
+    this.moonNeon.alpha = mp.alpha * ((Math.sin(time * 0.003) + 1) / 2 * 0.08 + 0.02);
+
+    // ── Windows react to mouse ──
+    this.drawWindows();
+
+    // Beams pulse
+    this.beams.forEach((b, i) => {
+      b.phase += b.speed;
+      const alpha = (Math.sin(b.phase) + 1) / 2 * 0.5 + 0.15;
+      b.g.clear();
+      b.g.fillStyle(b.color, alpha * 0.3);
+      b.g.fillRect(b.x - b.w * 2, b.top, b.w * 4, b.len);
+      b.g.fillStyle(b.color, alpha);
+      b.g.fillRect(b.x - b.w / 2, b.top, b.w, b.len);
+
+      if (this.reflections[i]) {
+        const rg = this.reflections[i].g;
+        rg.clear();
+        rg.fillStyle(b.color, alpha * 0.15);
+        rg.fillRect(b.x - b.w * 3, H * 0.78, b.w * 6, H * 0.22);
+      }
+    });
+
+    // Sparks float up + wind
+    this.sparks.forEach(s => {
+      s.phase += s.pulseSpeed;
+      s.g.alpha = (Math.sin(s.phase) + 1) / 2 * 0.7 + 0.1;
+      s.g.y += s.vy;
+      s.g.x += smoothWindX * 10 * dt;
+
+      const dx = s.g.x - mousePos.x;
+      const dy = s.g.y - mousePos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 100) {
+        s.g.alpha = Math.min(1, s.g.alpha + (100 - dist) / 100 * 0.5);
+        s.g.y -= 0.3;
+      }
+
+      if (s.g.y < -10) { s.g.y = H * 0.85; s.g.x = Phaser.Math.Between(0, W); }
+    });
+
+    // Fog drift
+    this.fog1.clear();
+    this.fog2.clear();
+    const fogOff = (time * 0.01 + smoothWindX * 50) % W;
+    this.fog1.fillStyle(0x1a1030, 0.15);
+    this.fog1.fillRect(-W + fogOff, H * 0.6, W * 2, H * 0.12);
+    this.fog2.fillStyle(0x0f0820, 0.1);
+    this.fog2.fillRect(W - fogOff, H * 0.5, W * 2, H * 0.08);
+  }
+}
+
+new Phaser.Game({
+  type: Phaser.AUTO, width: W, height: H, transparent: true,
+  scene: NeonCityScene, banner: false,
+  scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
+});
+</script>
+</body></html>

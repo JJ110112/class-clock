@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; }
+  body { overflow:hidden; background:#0a0e15; cursor:default; }
+</style>
+</head>
+<body>
+<script src="../phaser.min.js"></script>
+<script>
+/* ═══════════════════════════════
+   夜雨 – Night Rain
+   ═══════════════════════════════ */
+
+let smoothWindX = 0, smoothWindY = 0;
+// ★ Reduced gain & faster decay to fix overly strong wind
+const WIND_DECAY = 0.85, WIND_GAIN = 0.6;
+let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
+
+const DENSITIES = [
+  { label: '小雨',   count: 100 },
+  { label: '中雨',   count: 300 },
+  { label: '大雨',   count: 600 },
+];
+let densityIdx = 1;
+let scene = null;
+
+function onMouseMove(d) {
+  smoothWindX += d.windVX * d.windStrength * WIND_GAIN;
+  smoothWindY += d.windVY * d.windStrength * WIND_GAIN;
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data.type === 'mousemove') onMouseMove(e.data);
+  if (e.data.type === 'time') { currentHour = e.data.hours; currentMin = e.data.minutes; }
+  if (e.data.type === 'density') {
+    densityIdx = (densityIdx + e.data.dir + DENSITIES.length) % DENSITIES.length;
+    if (scene) scene.rebuildRain();
+    parent.postMessage({ type: 'densityLabel', label: DENSITIES[densityIdx].label }, '*');
+  }
+});
+
+const W = window.innerWidth, H = window.innerHeight;
+
+function getMoonPos() {
+  const t = currentHour + currentMin / 60;
+  const prog = ((t < 12 ? t + 24 : t) - 18) / 12;
+  const p = Phaser.Math.Clamp(prog, 0, 1);
+  return {
+    x: Phaser.Math.Linear(W * 0.1, W * 0.9, p),
+    y: H * 0.06 + Math.sin(p * Math.PI) * (-H * 0.03),
+    alpha: p > 0 && p < 1 ? 0.3 : 0.05, // dimmer behind clouds
+  };
+}
+
+class NightRainScene extends Phaser.Scene {
+  constructor() { super('night-rain'); }
+
+  create() {
+    scene = this;
+    const bg = this.add.graphics();
+    bg.fillGradientStyle(0x0f141e, 0x0a0e15, 0x070a10, 0x050810, 1);
+    bg.fillRect(0, 0, W, H).setDepth(-10);
+
+    // Moon (dim, behind clouds)
+    this.moonGlow = this.add.circle(0, 0, 40, 0x8899aa, 0.04).setDepth(4);
+    this.moon = this.add.circle(0, 0, 14, 0x8899aa, 0.3).setDepth(5);
+
+    this.rain = [];
+    this.rebuildRain();
+
+    // Lightning
+    this.nextLightning = Phaser.Math.Between(5000, 15000);
+    this.lightningFlash = this.add.rectangle(W/2, H/2, W, H, 0xffffff, 0).setDepth(20);
+  }
+
+  rebuildRain() {
+    this.rain.forEach(r => r.g.destroy());
+    this.rain = [];
+    const count = DENSITIES[densityIdx].count;
+    for (let i = 0; i < count; i++) this.rain.push(this.createRain(true));
+  }
+
+  createRain(init) {
+    const x = Phaser.Math.Between(-50, W + 50);
+    const y = init ? Phaser.Math.Between(0, H) : Phaser.Math.Between(-80, -5);
+    const len = Phaser.Math.FloatBetween(14, 28);
+    const speed = Phaser.Math.FloatBetween(14, 26);
+    const thick = Phaser.Math.FloatBetween(0.5, 1.8);
+    const g = this.add.graphics();
+    g.lineStyle(thick, 0x6b9fd8, Phaser.Math.FloatBetween(0.15, 0.45));
+    g.lineBetween(0, 0, -speed * 0.08, len);
+    g.setPosition(x, y).setDepth(2);
+    return { g, speed, len, thick };
+  }
+
+  update(time, delta) {
+    const dt = delta / 1000;
+    smoothWindX *= WIND_DECAY;
+    smoothWindY *= WIND_DECAY;
+
+    // ★ Gentle wind tilt, capped
+    const windTilt = Phaser.Math.Clamp(smoothWindX * 0.08, -0.3, 0.3);
+    const windPush = Phaser.Math.Clamp(smoothWindX * 8, -60, 60);
+
+    this.rain.forEach(r => {
+      r.g.x += (-r.speed * 0.12 + windPush) * dt * 60;
+      r.g.y += r.speed;
+      r.g.rotation = windTilt;
+      if (r.g.y > H + 10) {
+        r.g.x = Phaser.Math.Between(-50, W + 50);
+        r.g.y = Phaser.Math.Between(-80, -5);
+      }
+    });
+
+    // Lightning
+    this.nextLightning -= delta;
+    if (this.nextLightning <= 0) {
+      this.nextLightning = Phaser.Math.Between(6000, 20000);
+      this.lightningFlash.alpha = 0.7;
+      this.tweens.add({
+        targets: this.lightningFlash, alpha: 0, duration: 200, ease: 'Power2',
+        onComplete: () => {
+          this.time.delayedCall(80, () => {
+            this.lightningFlash.alpha = 0.3;
+            this.tweens.add({ targets: this.lightningFlash, alpha: 0, duration: 150 });
+          });
+        }
+      });
+    }
+
+    // Moon follows time
+    const mp = getMoonPos();
+    this.moon.x = Phaser.Math.Linear(this.moon.x, mp.x, 0.02);
+    this.moon.y = Phaser.Math.Linear(this.moon.y, mp.y, 0.02);
+    this.moon.alpha = mp.alpha;
+    this.moonGlow.setPosition(this.moon.x, this.moon.y);
+    this.moonGlow.alpha = mp.alpha * 0.15;
+  }
+}
+
+new Phaser.Game({
+  type: Phaser.AUTO, width: W, height: H, transparent: true,
+  scene: NightRainScene, banner: false,
+  scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
+});
+</script>
+</body></html>

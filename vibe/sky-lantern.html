@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; }
+  body { overflow:hidden; background:#0a0806; cursor:default; }
+</style>
+</head>
+<body>
+<script src="../phaser.min.js"></script>
+<script>
+/* ═══════════════════════════════
+   平溪天燈 – Sky Lanterns
+   ═══════════════════════════════ */
+
+let smoothWindX = 0, smoothWindY = 0;
+const WIND_DECAY = 0.93, WIND_GAIN = 0.8;
+let mousePos = { x: -999, y: -999 };
+let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
+
+const BLESSINGS_1 = ['福','安','順','夢','愛','財','喜','樂','旺','緣','健','壽'];
+const BLESSINGS_2 = ['平安','幸福','順利','圓滿','如意','心願','發財','健康','喜樂','好運','長久','成功','富貴','無憂','相伴'];
+const BLESSINGS_4 = ['平安順利','學業進步','金榜題名','心想事成','萬事如意','前程似錦','考試滿分','大吉大利','夢想成真','天天開心'];
+
+function randomBlessing() {
+  return Math.random() < 0.4
+    ? Phaser.Utils.Array.GetRandom(BLESSINGS_1)
+    : Phaser.Utils.Array.GetRandom(BLESSINGS_2);
+}
+
+const LANTERN_COLORS = [
+  { body: 0xff4422, glow: 0xff6644 },
+  { body: 0xff8800, glow: 0xffaa33 },
+  { body: 0xffcc00, glow: 0xffdd44 },
+  { body: 0xff3366, glow: 0xff5588 },
+  { body: 0xff6600, glow: 0xff8833 },
+];
+
+const TRAIN_TYPES = [
+  { label: '蒸汽火車 CK124', speed: 0.5, engine: 0x2a2a2a, cars: [0x553322,0x443322], hasSmokeStack: true, carCount: 2 },
+  { label: '平溪線區間車',   speed: 0.8, engine: 0x2255aa, cars: [0x2255aa,0x2255aa,0x2255aa], hasSmokeStack: false, carCount: 3 },
+  { label: '莒光號',         speed: 1.2, engine: 0xcc6600, cars: [0xcc6600,0xcc6600,0xcc6600,0xcc6600,0xcc6600,0xcc6600,0xcc6600], hasSmokeStack: false, carCount: 7 },
+  { label: '自強號 PP',      speed: 1.8, engine: 0xdd4422, cars: [0xdd4422,0xdd4422,0xdd4422,0xdd4422,0xdd4422,0xdd4422,0xdd4422,0xdd4422,0xdd4422], hasSmokeStack: false, carCount: 9 },
+  { label: '普悠瑪 TEMU2000',speed: 2.5, engine: 0xeeeeee, cars: [0xeeeeee,0xeeeeee,0xeeeeee,0xeeeeee,0xeeeeee,0xeeeeee,0xeeeeee,0xeeeeee], hasSmokeStack: false, carCount: 8, stripe: 0xcc2222 },
+  { label: '太魯閣 TEMU1000',speed: 2.8, engine: 0xeeeeee, cars: [0xeeeeee,0xeeeeee,0xeeeeee,0xeeeeee,0xeeeeee,0xeeeeee,0xeeeeee,0xeeeeee], hasSmokeStack: false, carCount: 8, stripe: 0xee7722 },
+  { label: 'EMU3000',        speed: 3.5, engine: 0x333333, cars: [0x333333,0x333333,0x333333,0x333333,0x333333,0x333333,0x333333,0x333333,0x333333,0x333333,0x333333,0x333333], hasSmokeStack: false, carCount: 12 },
+];
+let trainTypeIdx = 1;
+let scene = null;
+
+function onMouseMove(d) {
+  mousePos.x = d.x; mousePos.y = d.y;
+  smoothWindX += d.windVX * d.windStrength * WIND_GAIN;
+  smoothWindY += d.windVY * d.windStrength * WIND_GAIN;
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data.type === 'mousemove') onMouseMove(e.data);
+  if (e.data.type === 'time') { currentHour = e.data.hours; currentMin = e.data.minutes; }
+  if (e.data.type === 'density') {
+    trainTypeIdx = (trainTypeIdx + e.data.dir + TRAIN_TYPES.length) % TRAIN_TYPES.length;
+    parent.postMessage({ type: 'densityLabel', label: TRAIN_TYPES[trainTypeIdx].label }, '*');
+  }
+  if (e.data.type === 'click' && scene) {
+    scene.spawnLantern(e.data.x, e.data.y);
+  }
+});
+
+const W = window.innerWidth, H = window.innerHeight;
+
+function getMoonPos() {
+  const t = currentHour + currentMin / 60;
+  const prog = ((t < 12 ? t + 24 : t) - 18) / 12;
+  const p = Phaser.Math.Clamp(prog, 0, 1);
+  return {
+    x: Phaser.Math.Linear(W * 0.1, W * 0.9, p),
+    y: H * 0.08 + Math.sin(p * Math.PI) * (-H * 0.04),
+    alpha: p > 0 && p < 1 ? 0.5 : 0.1,
+  };
+}
+
+class SkyLanternScene extends Phaser.Scene {
+  constructor() { super('sky-lantern'); }
+
+  create() {
+    scene = this;
+
+    // ── Night sky ──
+    const bg = this.add.graphics().setDepth(-10);
+    bg.fillGradientStyle(0x0a0806, 0x0c0a08, 0x15100a, 0x0a0806, 1);
+    bg.fillRect(0, 0, W, H);
+
+    // ── Mountains silhouette ──
+    this.drawMountains();
+
+    // ── Railroad + station ──
+    this.drawRailroad();
+
+    // ── Train ──
+    this.trainG = this.add.graphics().setDepth(6);
+    this.trainX = -200;
+    this.trainSpeed = 1.0;
+    this.trainDir = 1;
+    this.trainActive = false;
+    this.nextTrain = Phaser.Math.Between(5000, 10000);
+    this.smokeParticles = [];
+
+    // ── Moon ──
+    this.moonGlow = this.add.circle(0, 0, 40, 0xffe8c0, 0.06).setDepth(-4);
+    this.moon = this.add.circle(0, 0, 14, 0xffe8c0, 0.5).setDepth(-3);
+
+    // ── Stars ──
+    this.starsG = this.add.graphics().setDepth(-5);
+    for (let i = 0; i < 60; i++) {
+      const sx = Phaser.Math.Between(0, W);
+      const sy = Phaser.Math.Between(0, H * 0.5);
+      this.starsG.fillStyle(0xffe8c0, Phaser.Math.FloatBetween(0.1, 0.5));
+      this.starsG.fillCircle(sx, sy, Phaser.Math.FloatBetween(0.5, 1.5));
+    }
+
+    // ── Lanterns ──
+    this.lanterns = [];
+
+    // ── Ambient floating lanterns ──
+    for (let i = 0; i < 5; i++) {
+      this.spawnAmbientLantern();
+    }
+  }
+
+  drawMountains() {
+    const g = this.add.graphics().setDepth(1);
+    // Far mountains
+    g.fillStyle(0x0f0c08, 1);
+    for (let x = 0; x < W; x += 3) {
+      const h = Math.sin(x * 0.003) * H * 0.08 + Math.sin(x * 0.008) * H * 0.04 + H * 0.15;
+      g.fillRect(x, H * 0.65 - h, 3, h + H * 0.35);
+    }
+    // Near hills
+    g.fillStyle(0x121008, 1);
+    for (let x = 0; x < W; x += 3) {
+      const h = Math.sin(x * 0.005 + 1) * H * 0.05 + Math.sin(x * 0.012) * H * 0.03 + H * 0.08;
+      g.fillRect(x, H * 0.72 - h, 3, h + H * 0.28);
+    }
+  }
+
+  drawRailroad() {
+    const g = this.add.graphics().setDepth(5);
+    const ry = H * 0.82;
+    // Ground/platform
+    g.fillStyle(0x2a2018, 1);
+    g.fillRect(0, ry - 4, W, 20);
+    // Rails
+    g.lineStyle(3, 0x666666, 0.8);
+    g.lineBetween(0, ry, W, ry);
+    g.lineBetween(0, ry + 10, W, ry + 10);
+    // Ties
+    g.lineStyle(2, 0x3a2a18, 0.7);
+    for (let x = 0; x < W; x += 20) {
+      g.lineBetween(x, ry - 2, x, ry + 12);
+    }
+    // Station elements
+    const sx = W * 0.35;
+    // Platform sign
+    g.fillStyle(0x1a1510, 1);
+    g.fillRect(sx - 30, ry - 40, 60, 30);
+    g.fillStyle(0xff8800, 0.6);
+    g.fillRect(sx - 26, ry - 37, 52, 24);
+    // Lamp posts
+    for (const lx of [W * 0.2, W * 0.5, W * 0.8]) {
+      g.lineStyle(2, 0x555555, 0.8);
+      g.lineBetween(lx, ry - 50, lx, ry - 4);
+      g.fillStyle(0xffaa44, 0.4);
+      g.fillCircle(lx, ry - 52, 6);
+      g.fillStyle(0xffcc66, 0.15);
+      g.fillCircle(lx, ry - 52, 20);
+    }
+    // Ground below tracks
+    g.fillStyle(0x1a1510, 1);
+    g.fillRect(0, ry + 14, W, H - ry - 14);
+  }
+
+  drawTrain(x) {
+    const g = this.trainG;
+    g.clear();
+    if (!this.trainActive) return;
+    const tt = TRAIN_TYPES[trainTypeIdx];
+    const totalLen = 55 + tt.carCount * 55 + 50;
+    if (x < -totalLen && this.trainDir > 0) return;
+    if (x > W + totalLen && this.trainDir < 0) return;
+    if ((this.trainDir > 0 && x > W + totalLen) || (this.trainDir < 0 && x < -totalLen)) {
+      this.trainActive = false; return;
+    }
+    const ry = H * 0.82;
+    const d = this.trainDir;
+    const ec = tt.engine;
+
+    // ── Smoke stack (steam train only) ──
+    const chimneyX = x + (d > 0 ? 35 : 15);
+    if (tt.hasSmokeStack) {
+      g.fillStyle(0x222222, 1);
+      g.fillRect(chimneyX - 4, ry - 36, 8, 10);
+      g.fillStyle(0x333333, 1);
+      g.fillRect(chimneyX - 6, ry - 38, 12, 4);
+    }
+
+    // ── Engine body ──
+    g.fillStyle(ec, 1);
+    g.fillRect(x, ry - 22, 50 * d, 18);
+    // Cab / roof
+    g.fillStyle(Phaser.Display.Color.IntegerToColor(ec).darken(20).color, 1);
+    g.fillRect(x + 2 * d, ry - 28, 20 * d, 8);
+    // Windshield
+    g.fillStyle(0x88aacc, 0.4);
+    g.fillRect(x + 4 * d, ry - 26, 8 * d, 5);
+    // Stripe (modern trains)
+    if (!tt.hasSmokeStack) {
+      const sc = tt.stripe || 0xffffff;
+      g.fillStyle(sc, tt.stripe ? 0.9 : 0.15);
+      g.fillRect(x, ry - 14, 50 * d, tt.stripe ? 3 : 2);
+    }
+    // Front light + glow
+    const lightX = x + (d > 0 ? 48 : 2);
+    g.fillStyle(0xffee88, 0.2);
+    g.fillCircle(lightX, ry - 14, 12);
+    g.fillStyle(0xffee88, 0.8);
+    g.fillCircle(lightX, ry - 14, 3);
+    // Wheels
+    g.fillStyle(0x1a1a1a, 1);
+    for (let w = 8; w < 45; w += 12) {
+      g.fillCircle(x + w * d, ry - 2, 5);
+    }
+
+    // ── Cars ──
+    for (let c = 0; c < tt.carCount; c++) {
+      const cx = x - (c + 1) * 55 * d;
+      const cc = tt.cars[c % tt.cars.length];
+      g.fillStyle(cc, 1);
+      g.fillRect(cx, ry - 20, 48 * d, 16);
+      // Stripe
+      if (!tt.hasSmokeStack) {
+        const sc = tt.stripe || 0xffffff;
+        g.fillStyle(sc, tt.stripe ? 0.9 : 0.12);
+        g.fillRect(cx, ry - 12, 48 * d, tt.stripe ? 3 : 2);
+      }
+      // Windows
+      g.fillStyle(0xffcc66, 0.35);
+      for (let w = 4; w < 44; w += 8) {
+        g.fillRect(cx + w * d, ry - 18, 5 * d, 7);
+      }
+      // Wheels
+      g.fillStyle(0x1a1a1a, 1);
+      g.fillCircle(cx + 8 * d, ry - 2, 4);
+      g.fillCircle(cx + 38 * d, ry - 2, 4);
+    }
+
+    // ── Smoke / exhaust ──
+    const smokeRate = tt.hasSmokeStack ? 0.5 : 0.15; // steam = more smoke
+    const smokeColor = tt.hasSmokeStack ? 0x888888 : 0x666688;
+    const smokeSize = tt.hasSmokeStack ? [5, 10] : [2, 5];
+    if (Math.random() < smokeRate) {
+      const sx = tt.hasSmokeStack ? chimneyX : x + 25 * d;
+      const sy = tt.hasSmokeStack ? ry - 40 : ry - 30;
+      this.smokeParticles.push({
+        x: sx, y: sy,
+        vx: -d * 0.3 + (Math.random() - 0.5) * 0.3,
+        vy: -Phaser.Math.FloatBetween(0.3, 0.8),
+        size: Phaser.Math.FloatBetween(smokeSize[0], smokeSize[1]),
+        alpha: tt.hasSmokeStack ? 0.6 : 0.3,
+        life: tt.hasSmokeStack ? 1.5 : 0.8,
+        color: smokeColor,
+      });
+    }
+  }
+
+  updateSmoke(dt) {
+    const g = this.trainG;
+    this.smokeParticles = this.smokeParticles.filter(s => {
+      s.x += s.vx + smoothWindX * 3 * dt;
+      s.y += s.vy;
+      s.size += 0.15;
+      s.alpha -= dt * 0.4;
+      s.life -= dt;
+      if (s.alpha <= 0 || s.life <= 0) return false;
+      g.fillStyle(s.color || 0x888888, s.alpha * 0.5);
+      g.fillCircle(s.x, s.y, s.size);
+      g.fillStyle(s.color || 0x666666, s.alpha * 0.3);
+      g.fillCircle(s.x - 1, s.y - 1, s.size * 0.7);
+      return true;
+    });
+  }
+
+  spawnLantern(cx, cy) {
+    const max = 30; // lantern limit
+    if (this.lanterns.length >= max) {
+      // Remove oldest
+      const old = this.lanterns.shift();
+      old.gfx.destroy(); old.txt.destroy();
+    }
+    const c = Phaser.Utils.Array.GetRandom(LANTERN_COLORS);
+    this.lanterns.push(this.createLantern(cx, cy, c, randomBlessing(), false));
+  }
+
+  spawnAmbientLantern() {
+    const c = Phaser.Utils.Array.GetRandom(LANTERN_COLORS);
+    const x = Phaser.Math.Between(W * 0.1, W * 0.9);
+    const y = Phaser.Math.Between(H * 0.1, H * 0.5);
+    this.lanterns.push(this.createLantern(x, y, c, randomBlessing(), true));
+  }
+
+  createLantern(cx, cy, color, text, ambient) {
+    const s = ambient ? Phaser.Math.FloatBetween(0.4, 0.7) : 1.0;
+    const gfx = this.add.graphics().setDepth(8);
+    // Text layout: vertical for 1-2 chars, horizontal for 4 chars
+    const isVertical = text.length <= 2;
+    const fontSize = text.length === 1 ? Math.round(22 * s) : text.length === 2 ? Math.round(14 * s) : Math.round(10 * s);
+    const displayText = isVertical ? text.split('').join('\n') : text;
+    const txt = this.add.text(cx, cy - 6 * s, displayText, {
+      fontFamily: 'Noto Sans TC, sans-serif',
+      fontSize: fontSize + 'px',
+      fontStyle: 'bold',
+      color: '#3a0000',
+      align: 'center',
+      lineSpacing: text.length === 2 ? -2 : 0,
+    }).setOrigin(0.5).setDepth(9).setAlpha(0.6);
+
+    return {
+      gfx, txt,
+      x: cx, y: cy,
+      color, text,
+      vy: ambient ? Phaser.Math.FloatBetween(-0.15, -0.05) : -0.8,
+      vx: 0,
+      flicker: Phaser.Math.FloatBetween(0, Math.PI * 2),
+      scale: s,
+      age: ambient ? 999 : 0,
+      ambient,
+    };
+  }
+
+  drawLantern(l, time) {
+    const g = l.gfx;
+    g.clear();
+    g.setPosition(l.x, l.y);
+    const s = l.scale;
+    const flicker = (Math.sin(l.flicker) + 1) / 2;
+    const baseAlpha = l.ambient ? 0.5 + flicker * 0.2 : 0.7 + flicker * 0.3;
+
+    // Outer glow
+    g.fillStyle(l.color.glow, baseAlpha * 0.1 * s);
+    g.fillCircle(0, 0, 50 * s);
+
+    // Inner glow
+    g.fillStyle(l.color.glow, baseAlpha * 0.2 * s);
+    g.fillCircle(0, -5 * s, 30 * s);
+
+    // Lantern body
+    g.fillStyle(l.color.body, baseAlpha);
+    g.fillRoundedRect(-18 * s, -28 * s, 36 * s, 45 * s, 6 * s);
+
+    // Top cap
+    g.fillStyle(l.color.body, baseAlpha * 0.8);
+    g.fillRect(-8 * s, -32 * s, 16 * s, 5 * s);
+
+    // Bottom opening
+    g.fillStyle(l.color.glow, baseAlpha * 0.9);
+    g.fillRect(-12 * s, 15 * s, 24 * s, 4 * s);
+
+    // Flame inside
+    g.fillStyle(0xffee44, baseAlpha * (0.6 + flicker * 0.4));
+    g.fillCircle(0, 10 * s, 4 * s);
+    g.fillStyle(0xffaa22, baseAlpha * 0.5);
+    g.fillCircle(0, 8 * s, 2 * s);
+
+    // Update text position & alpha
+    l.txt.setPosition(l.x, l.y - 6 * s);
+    l.txt.setAlpha(baseAlpha * 0.55);
+    l.txt.setScale(s);
+  }
+
+  update(time, delta) {
+    const dt = delta / 1000;
+    smoothWindX *= WIND_DECAY;
+    smoothWindY *= WIND_DECAY;
+
+    // Moon
+    const mp = getMoonPos();
+    this.moon.x = Phaser.Math.Linear(this.moon.x, mp.x, 0.02);
+    this.moon.y = Phaser.Math.Linear(this.moon.y, mp.y, 0.02);
+    this.moon.alpha = mp.alpha;
+    this.moonGlow.setPosition(this.moon.x, this.moon.y);
+    this.moonGlow.alpha = mp.alpha * 0.1;
+
+    // Train
+    this.nextTrain -= delta;
+    if (this.nextTrain <= 0 && !this.trainActive) {
+      this.nextTrain = Phaser.Math.Between(8000, 18000);
+      this.trainDir = Math.random() > 0.5 ? 1 : -1;
+      this.trainX = this.trainDir > 0 ? -300 : W + 300;
+      this.trainSpeed = TRAIN_TYPES[trainTypeIdx].speed;
+      this.trainActive = true;
+    }
+    if (this.trainActive) {
+      this.trainX += this.trainSpeed * this.trainDir;
+    }
+    this.drawTrain(this.trainX);
+    this.updateSmoke(dt);
+
+    // Lanterns
+    const mouseInfluence = 120;
+    this.lanterns = this.lanterns.filter(l => {
+      l.age += dt;
+      l.flicker += 0.04 + Math.random() * 0.01;
+
+      // Rise
+      l.y += l.vy;
+      l.vy = Math.max(l.vy, -1.2); // cap rise speed
+
+      // New lanterns slow down as they rise
+      if (!l.ambient && l.age < 3) {
+        l.vy = Phaser.Math.Linear(l.vy, -0.25, 0.005);
+      }
+
+      // Wind
+      l.vx += smoothWindX * 0.01;
+      l.vx *= 0.98;
+      l.x += l.vx;
+
+      // Mouse push
+      const dx = l.x - mousePos.x;
+      const dy = l.y - mousePos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < mouseInfluence && dist > 0) {
+        const push = (1 - dist / mouseInfluence) * 0.8;
+        l.vx += (dx / dist) * push;
+        l.vy += (dy / dist) * push * 0.3;
+      }
+
+      // Slight sway
+      l.x += Math.sin(time * 0.001 + l.flicker) * 0.15;
+
+      // Shrink as it goes higher
+      if (l.y < H * 0.15) {
+        l.scale *= 0.998;
+      }
+
+      this.drawLantern(l, time);
+
+      // Remove when off screen or too small
+      if (l.y < -80 || l.scale < 0.1) {
+        l.gfx.destroy(); l.txt.destroy();
+        if (l.ambient) this.spawnAmbientLantern();
+        return false;
+      }
+      return true;
+    });
+  }
+}
+
+new Phaser.Game({
+  type: Phaser.AUTO, width: W, height: H, transparent: true,
+  scene: SkyLanternScene, banner: false,
+  scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
+});
+</script>
+</body></html>

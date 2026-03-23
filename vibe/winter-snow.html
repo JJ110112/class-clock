@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; }
+  body { overflow:hidden; background: linear-gradient(180deg, #c8ddf0 0%, #dfe9f3 30%, #e8f0f8 100%); cursor:default; }
+</style>
+</head>
+<body>
+<script src="../phaser.min.js"></script>
+<script>
+/* ═══════════════════════════════
+   冬雪 – Winter Snow (daytime + sun)
+   ═══════════════════════════════ */
+
+let smoothWindX = 0, smoothWindY = 0;
+const WIND_DECAY = 0.93, WIND_GAIN = 1.5;
+let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
+
+const DENSITIES = [
+  { label: '小雪',   count: 40 },
+  { label: '中雪',   count: 90 },
+  { label: '大雪',   count: 200 },
+];
+let densityIdx = 1;
+let scene = null;
+
+function onMouseMove(d) {
+  smoothWindX += d.windVX * d.windStrength * WIND_GAIN;
+  smoothWindY += d.windVY * d.windStrength * WIND_GAIN;
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data.type === 'mousemove') onMouseMove(e.data);
+  if (e.data.type === 'time') { currentHour = e.data.hours; currentMin = e.data.minutes; }
+  if (e.data.type === 'density') {
+    densityIdx = (densityIdx + e.data.dir + DENSITIES.length) % DENSITIES.length;
+    if (scene) scene.rebuildSnow();
+    parent.postMessage({ type: 'densityLabel', label: DENSITIES[densityIdx].label }, '*');
+  }
+});
+
+const W = window.innerWidth, H = window.innerHeight;
+
+function getSunPos() {
+  const t = currentHour + currentMin / 60;
+  const prog = (t - 6) / 12;
+  const p = Phaser.Math.Clamp(prog, 0, 1);
+  return {
+    x: Phaser.Math.Linear(W * 0.08, W * 0.92, p),
+    y: H * 0.12 - Math.sin(p * Math.PI) * H * 0.08,
+    alpha: p > 0 && p < 1 ? 0.7 : 0.1,
+  };
+}
+
+class WinterScene extends Phaser.Scene {
+  constructor() { super('winter'); }
+
+  create() {
+    scene = this;
+    const bg = this.add.graphics();
+    bg.fillGradientStyle(0xc8ddf0, 0xd4e4f2, 0xdfe9f3, 0xe8f0f8, 1);
+    bg.fillRect(0, 0, W, H).setDepth(-10);
+
+    // Ground snow
+    const ground = this.add.graphics();
+    ground.fillGradientStyle(0xf0f4f8, 0xeef2f6, 0xffffff, 0xffffff, 1);
+    ground.fillRect(0, H * 0.88, W, H * 0.12).setDepth(0);
+
+    // Sun
+    this.sunRays = this.add.circle(0, 0, 90, 0xfbbf24, 0.06).setDepth(3);
+    this.sunGlow = this.add.circle(0, 0, 50, 0xfbbf24, 0.12).setDepth(4);
+    this.sun = this.add.circle(0, 0, 26, 0xfbbf24, 0.7).setDepth(5);
+
+    this.snowflakes = [];
+    this.rebuildSnow();
+
+    // Snow accumulation
+    this.piledG = this.add.graphics().setDepth(0.5);
+    this.piled = [];
+  }
+
+  rebuildSnow() {
+    this.snowflakes.forEach(s => s.g.destroy());
+    this.snowflakes = [];
+    const count = DENSITIES[densityIdx].count;
+    for (let i = 0; i < count; i++) this.snowflakes.push(this.createSnow(true));
+  }
+
+  createSnow(init) {
+    const x = Phaser.Math.Between(0, W);
+    const y = init ? Phaser.Math.Between(0, H) : Phaser.Math.Between(-30, -2);
+    const r = Phaser.Math.FloatBetween(1.5, 4.5);
+    const g = this.add.graphics();
+    g.fillStyle(0xffffff, Phaser.Math.FloatBetween(0.5, 0.9));
+    g.fillCircle(0, 0, r);
+    g.fillStyle(0xd0e4ff, 0.15);
+    g.fillCircle(0, 0, r * 2.5);
+    g.setPosition(x, y).setDepth(2);
+    return {
+      g, r,
+      speed: Phaser.Math.FloatBetween(0.3, 1.0),
+      swingPhase: Phaser.Math.FloatBetween(0, Math.PI * 2),
+      swingSpeed: Phaser.Math.FloatBetween(0.003, 0.012),
+      swingAmp: Phaser.Math.FloatBetween(0.3, 1.8),
+    };
+  }
+
+  update(time, delta) {
+    const dt = delta / 1000;
+    smoothWindX *= WIND_DECAY;
+    smoothWindY *= WIND_DECAY;
+
+    const groundY = H * 0.88;
+    this.snowflakes.forEach(s => {
+      s.swingPhase += s.swingSpeed;
+      s.g.x += Math.sin(s.swingPhase) * s.swingAmp + smoothWindX * 35 * dt;
+      s.g.y += s.speed + smoothWindY * 10 * dt;
+      if (s.g.y > groundY) {
+        if (this.piled.length < 150) {
+          this.piled.push({
+            x: s.g.x, y: groundY - Phaser.Math.FloatBetween(0, 6),
+            r: s.r * Phaser.Math.FloatBetween(0.8, 1.2),
+            alpha: 0.7, age: 0,
+          });
+        }
+        s.g.x = Phaser.Math.Between(0, W); s.g.y = Phaser.Math.Between(-30, -2);
+      }
+      if (s.g.x < -30 || s.g.x > W + 30) {
+        s.g.x = Phaser.Math.Between(0, W); s.g.y = Phaser.Math.Between(-30, -2);
+      }
+    });
+
+    // Snow accumulation
+    this.piledG.clear();
+    this.piled = this.piled.filter(p => {
+      p.age += dt;
+      if (p.age > 6) p.alpha -= dt * 0.2;
+      if (p.alpha <= 0) return false;
+      this.piledG.fillStyle(0xffffff, p.alpha * 0.6);
+      this.piledG.fillCircle(p.x, p.y, p.r * 1.5);
+      this.piledG.fillStyle(0xe8f0ff, p.alpha * 0.25);
+      this.piledG.fillCircle(p.x, p.y, p.r * 3);
+      return true;
+    });
+
+    const sp = getSunPos();
+    this.sun.x = Phaser.Math.Linear(this.sun.x, sp.x, 0.02);
+    this.sun.y = Phaser.Math.Linear(this.sun.y, sp.y, 0.02);
+    this.sun.alpha = sp.alpha;
+    this.sunGlow.setPosition(this.sun.x, this.sun.y);
+    this.sunRays.setPosition(this.sun.x, this.sun.y);
+    const pulse = (Math.sin(time * 0.0015) + 1) / 2;
+    this.sunGlow.alpha = sp.alpha * (0.12 + pulse * 0.06);
+    this.sunRays.alpha = sp.alpha * (0.04 + pulse * 0.04);
+    this.sunRays.setScale(1 + pulse * 0.08);
+  }
+}
+
+new Phaser.Game({
+  type: Phaser.AUTO, width: W, height: H, transparent: true,
+  scene: WinterScene, banner: false,
+  scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
+});
+</script>
+</body></html>

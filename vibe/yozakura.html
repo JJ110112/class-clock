@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; }
+  body { overflow:hidden; background:#0a0507; cursor:default; }
+</style>
+</head>
+<body>
+<script src="../phaser.min.js"></script>
+<script>
+/* ═══════════════════════════════
+   夜櫻 – Night Sakura
+   ═══════════════════════════════ */
+
+// ── Wind state ──
+let smoothWindX = 0, smoothWindY = 0;
+const WIND_DECAY = 0.92, WIND_GAIN = 1.5;
+let mousePos = { x: -999, y: -999 };
+
+// ── Time for moon ──
+let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
+
+// ── Density ──
+const DENSITIES = [
+  { label: '花見小徑', count: 35 },
+  { label: '櫻花紛飛', count: 70 },
+  { label: '花吹雪',   count: 140 },
+];
+let densityIdx = 1;
+
+function onMouseMove(d) {
+  mousePos.x = d.x; mousePos.y = d.y;
+  smoothWindX += d.windVX * d.windStrength * WIND_GAIN;
+  smoothWindY += d.windVY * d.windStrength * WIND_GAIN;
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data.type === 'mousemove') onMouseMove(e.data);
+  if (e.data.type === 'time') { currentHour = e.data.hours; currentMin = e.data.minutes; }
+  if (e.data.type === 'density') {
+    densityIdx = (densityIdx + e.data.dir + DENSITIES.length) % DENSITIES.length;
+    if (scene) scene.rebuildPetals();
+    parent.postMessage({ type: 'densityLabel', label: DENSITIES[densityIdx].label }, '*');
+  }
+});
+
+const W = window.innerWidth, H = window.innerHeight;
+const COLORS = [0xffb7c5, 0xffc0cb, 0xffe4e1, 0xff99aa];
+let scene = null;
+
+// ── Moon position from time (arc: 18h→rise left, 0h→top, 6h→set right) ──
+function getMoonPos() {
+  const t = currentHour + currentMin / 60;
+  // Visible 18:00–06:00, arc across sky
+  const prog = ((t < 12 ? t + 24 : t) - 18) / 12; // 0→1 over 12h
+  const p = Phaser.Math.Clamp(prog, 0, 1);
+  const x = Phaser.Math.Linear(W * 0.1, W * 0.9, p);
+  const y = H * 0.08 + Math.sin(p * Math.PI) * (-H * 0.05); // slight arc up
+  const alpha = p > 0 && p < 1 ? 0.7 : 0.15;
+  return { x, y, alpha };
+}
+
+class YozakuraScene extends Phaser.Scene {
+  constructor() { super('yozakura'); }
+
+  create() {
+    scene = this;
+    const bg = this.add.graphics();
+    bg.fillGradientStyle(0x0a0507, 0x0a0507, 0x1a0a12, 0x1a0a12, 1);
+    bg.fillRect(0, 0, W, H);
+    bg.setDepth(-10);
+
+    // Moon
+    this.moonGlow = this.add.circle(0, 0, 50, 0xe2e8f0, 0.08).setDepth(4);
+    this.moon = this.add.circle(0, 0, 18, 0xe2e8f0, 0.7).setDepth(5);
+
+    // Petals
+    this.petals = [];
+    this.rebuildPetals();
+
+    // Piled petals on ground
+    this.piledG = this.add.graphics().setDepth(1);
+    this.piled = []; // { x, y, size, color, alpha, age }
+  }
+
+  rebuildPetals() {
+    this.petals.forEach(p => p.g.destroy());
+    this.petals = [];
+    const count = DENSITIES[densityIdx].count;
+    for (let i = 0; i < count; i++) this.petals.push(this.createPetal(true));
+  }
+
+  createPetal(init) {
+    const x = Phaser.Math.Between(0, W);
+    const y = init ? Phaser.Math.Between(0, H) : Phaser.Math.Between(-40, -5);
+    const size = Phaser.Math.FloatBetween(3, 8);
+    const color = Phaser.Utils.Array.GetRandom(COLORS);
+    const g = this.add.graphics();
+    g.fillStyle(color, Phaser.Math.FloatBetween(0.3, 0.7));
+    g.fillEllipse(0, 0, size * 2.5, size * 1.2);
+    g.setPosition(x, y).setDepth(2);
+    return {
+      g, size,
+      baseSpeed: Phaser.Math.FloatBetween(0.4, 1.2),
+      swingPhase: Phaser.Math.FloatBetween(0, Math.PI * 2),
+      swingSpeed: Phaser.Math.FloatBetween(0.008, 0.025),
+      swingAmp: Phaser.Math.FloatBetween(0.5, 2.5),
+      rotSpeed: Phaser.Math.FloatBetween(-0.02, 0.02),
+    };
+  }
+
+  update(time, delta) {
+    const dt = delta / 1000;
+    smoothWindX *= WIND_DECAY;
+    smoothWindY *= WIND_DECAY;
+
+    const groundY = H - 5;
+    this.petals.forEach(p => {
+      p.swingPhase += p.swingSpeed;
+      p.g.x += Math.sin(p.swingPhase) * p.swingAmp + smoothWindX * 40 * dt;
+      p.g.y += p.baseSpeed + smoothWindY * 15 * dt;
+      p.g.rotation += p.rotSpeed + smoothWindX * 0.01;
+      if (p.g.y > groundY) {
+        // Pile up
+        if (this.piled.length < 120) {
+          this.piled.push({
+            x: p.g.x, y: groundY - Phaser.Math.FloatBetween(0, 8),
+            size: p.size, color: Phaser.Utils.Array.GetRandom(COLORS),
+            alpha: 0.6, age: 0,
+          });
+        }
+        p.g.x = Phaser.Math.Between(0, W); p.g.y = Phaser.Math.Between(-40, -5);
+      }
+      if (p.g.x < -50 || p.g.x > W + 50) {
+        p.g.x = Phaser.Math.Between(0, W); p.g.y = -10;
+      }
+    });
+
+    // Draw piled petals
+    this.piledG.clear();
+    this.piled = this.piled.filter(p => {
+      p.age += dt;
+      if (p.age > 4) p.alpha -= dt * 0.3; // fade after 4s
+      if (p.alpha <= 0) return false;
+      this.piledG.fillStyle(p.color, p.alpha * 0.5);
+      this.piledG.fillEllipse(p.x, p.y, p.size * 2, p.size * 0.8);
+      return true;
+    });
+
+    // Moon follows time
+    const mp = getMoonPos();
+    this.moon.x = Phaser.Math.Linear(this.moon.x, mp.x, 0.02);
+    this.moon.y = Phaser.Math.Linear(this.moon.y, mp.y, 0.02);
+    this.moon.alpha = mp.alpha;
+    this.moonGlow.setPosition(this.moon.x, this.moon.y);
+    this.moonGlow.alpha = mp.alpha * 0.12;
+  }
+}
+
+new Phaser.Game({
+  type: Phaser.AUTO, width: W, height: H, transparent: true,
+  scene: YozakuraScene, banner: false,
+  scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
+});
+</script>
+</body></html>

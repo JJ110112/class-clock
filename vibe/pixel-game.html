@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; }
+  body { overflow:hidden; background:#4a90d9; cursor:default; }
+</style>
+</head>
+<body>
+<script src="../phaser.min.js"></script>
+<script>
+/* ═══════════════════════════════
+   像素冒險 – Pixel Art Game
+   ═══════════════════════════════ */
+
+let smoothWindX = 0, smoothWindY = 0;
+const WIND_DECAY = 0.90, WIND_GAIN = 1.0;
+let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
+
+const DENSITIES = [
+  { label: '寧靜草原',  coins: 5,  clouds: 3 },
+  { label: '冒險旅途',  coins: 12, clouds: 5 },
+  { label: '金幣雨',    coins: 30, clouds: 8 },
+];
+let densityIdx = 1;
+let scene = null;
+
+function onMouseMove(d) {
+  smoothWindX += d.windVX * d.windStrength * WIND_GAIN;
+  smoothWindY += d.windVY * d.windStrength * WIND_GAIN;
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data.type === 'mousemove') onMouseMove(e.data);
+  if (e.data.type === 'time') { currentHour = e.data.hours; currentMin = e.data.minutes; }
+  if (e.data.type === 'density') {
+    densityIdx = (densityIdx + e.data.dir + DENSITIES.length) % DENSITIES.length;
+    if (scene) scene.rebuild();
+    parent.postMessage({ type: 'densityLabel', label: DENSITIES[densityIdx].label }, '*');
+  }
+  if (e.data.type === 'click' && scene) {
+    scene.handleClick(e.data.x, e.data.y);
+  }
+});
+
+const W = window.innerWidth, H = window.innerHeight;
+const PIXEL = Math.max(2, Math.round(H / 180));
+
+// Sun arc for daytime
+function getSunPos() {
+  const t = currentHour + currentMin / 60;
+  const prog = (t - 6) / 12;
+  const p = Phaser.Math.Clamp(prog, 0, 1);
+  return {
+    x: Phaser.Math.Linear(W * 0.1, W * 0.9, p),
+    y: H * 0.12 - Math.sin(p * Math.PI) * H * 0.06,
+    alpha: p > 0 && p < 1 ? 1 : 0.3,
+  };
+}
+
+// Draw pixel rectangle helper
+function pixRect(g, x, y, w, h, color, alpha) {
+  g.fillStyle(color, alpha !== undefined ? alpha : 1);
+  g.fillRect(x, y, w, h);
+}
+
+class PixelGameScene extends Phaser.Scene {
+  constructor() { super('pixel-game'); }
+
+  create() {
+    scene = this;
+    const P = PIXEL;
+
+    // ── Sky gradient (banded pixel look) ──
+    const bg = this.add.graphics().setDepth(-10);
+    const skyColors = [0x3a78c4, 0x4a8ad6, 0x5a9ae6, 0x6aabf0, 0x7abcf8, 0x8eccff];
+    const bandH = Math.ceil(H / skyColors.length);
+    skyColors.forEach((c, i) => { bg.fillStyle(c, 1); bg.fillRect(0, i * bandH, W, bandH); });
+
+    // ── Ground ──
+    this.groundG = this.add.graphics().setDepth(6);
+    const groundY = H - P * 8;
+    // Grass top
+    pixRect(this.groundG, 0, groundY, W, P * 2, 0x5cb85c);
+    // Dirt
+    pixRect(this.groundG, 0, groundY + P * 2, W, P * 6, 0x8b6914);
+    // Brick lines
+    for (let row = 0; row < 3; row++) {
+      const ry = groundY + P * 2 + row * P * 2;
+      const off = row % 2 === 0 ? 0 : P * 6;
+      for (let bx = off; bx < W; bx += P * 12) {
+        this.groundG.lineStyle(1, 0x6b4f10, 0.5);
+        this.groundG.lineBetween(bx, ry, bx, ry + P * 2);
+      }
+      this.groundG.lineStyle(1, 0x6b4f10, 0.4);
+      this.groundG.lineBetween(0, ry, W, ry);
+    }
+
+    // ── Hills ──
+    this.hillsG = this.add.graphics().setDepth(1);
+    this.drawHills();
+
+    // ── Sun (pixel style) ──
+    this.sunG = this.add.graphics().setDepth(3);
+
+    // ── Castle ──
+    this.castleG = this.add.graphics().setDepth(4);
+    this.castleCX = W * 0.82;
+    this.castleGroundY = groundY;
+    this.drawCastle(this.castleCX, groundY);
+
+    // ── Running characters ──
+    this.runners = [];
+
+    // ── Clouds, coins ──
+    this.clouds = [];
+    this.coins = [];
+    this.coinFrame = 0;
+    this.rebuild();
+  }
+
+  drawHills() {
+    const P = PIXEL;
+    const groundY = H - P * 8;
+    const g = this.hillsG;
+    // Back hills
+    g.fillStyle(0x3a9a4a, 0.6);
+    this.drawPixelHill(g, W * 0.15, groundY, W * 0.35, P * 18);
+    this.drawPixelHill(g, W * 0.55, groundY, W * 0.3, P * 14);
+    // Front bushes
+    g.fillStyle(0x4aaa5a, 0.8);
+    this.drawPixelHill(g, W * 0.05, groundY, W * 0.18, P * 8);
+    this.drawPixelHill(g, W * 0.7, groundY, W * 0.2, P * 10);
+  }
+
+  drawPixelHill(g, cx, baseY, width, height) {
+    const P = PIXEL;
+    const steps = Math.ceil(width / P);
+    for (let i = 0; i < steps; i++) {
+      const x = cx - width / 2 + i * P;
+      const t = (i / steps) * Math.PI;
+      const h = Math.sin(t) * height;
+      g.fillRect(x, baseY - h, P, h);
+    }
+  }
+
+  drawCastle(cx, groundY) {
+    const P = PIXEL;
+    const g = this.castleG;
+    const cw = P * 16, ch = P * 24;
+    const baseX = cx - cw / 2, baseY2 = groundY - ch;
+    // Main wall
+    pixRect(g, baseX, baseY2, cw, ch, 0x8899aa);
+    // Battlements
+    for (let i = 0; i < 4; i++) {
+      pixRect(g, baseX + i * P * 4, baseY2 - P * 3, P * 3, P * 3, 0x8899aa);
+    }
+    // Tower
+    const tw = P * 8, th = P * 12;
+    pixRect(g, cx - tw / 2, baseY2 - th, tw, th, 0x7788aa);
+    // Roof
+    for (let r = 0; r < 4; r++) {
+      pixRect(g, cx - (4 - r) * P, baseY2 - th - (r + 1) * P * 1.5, (4 - r) * P * 2, P * 1.5, 0xcc3333);
+    }
+    // Flag
+    pixRect(g, cx, baseY2 - th - P * 9, P, P * 4, 0x663322);
+    pixRect(g, cx + P, baseY2 - th - P * 9, P * 3, P * 2, 0xff3333);
+    // Windows
+    pixRect(g, cx - P * 2, baseY2 + P * 4, P * 2, P * 3, 0x223344);
+    pixRect(g, cx + P, baseY2 + P * 4, P * 2, P * 3, 0x223344);
+    // Door
+    pixRect(g, cx - P * 2, groundY - P * 6, P * 4, P * 6, 0x553311);
+  }
+
+  rebuild() {
+    this.clouds.forEach(c => c.g.destroy());
+    this.coins.forEach(c => c.g.destroy());
+    const d = DENSITIES[densityIdx];
+
+    // Clouds
+    this.clouds = [];
+    for (let i = 0; i < d.clouds; i++) {
+      this.clouds.push(this.createCloud());
+    }
+
+    // Coins
+    this.coins = [];
+    const groundY = H - PIXEL * 8;
+    for (let i = 0; i < d.coins; i++) {
+      const x = Phaser.Math.Between(PIXEL * 4, W - PIXEL * 4);
+      const y = Phaser.Math.Between(groundY - PIXEL * 30, groundY - PIXEL * 12);
+      const g = this.add.graphics().setPosition(x, y).setDepth(5);
+      this.coins.push({ g, baseY: y, phase: Phaser.Math.FloatBetween(0, Math.PI * 2) });
+    }
+  }
+
+  createCloud() {
+    const P = PIXEL;
+    const x = Phaser.Math.Between(0, W);
+    const y = Phaser.Math.Between(P * 4, H * 0.35);
+    const size = Phaser.Math.Between(3, 6);
+    const g = this.add.graphics().setPosition(x, y).setDepth(2);
+    g.fillStyle(0xffffff, 0.9);
+    // Pixel cloud shape
+    g.fillRect(-size * P, 0, size * 2 * P, P * 3);
+    g.fillRect(-size * P + P, -P, (size * 2 - 2) * P, P);
+    g.fillRect(-size * P + P, P * 3, (size * 2 - 2) * P, P);
+    return { g, speed: Phaser.Math.FloatBetween(0.15, 0.5), size };
+  }
+
+  handleClick(mx, my) {
+    const P = PIXEL;
+
+    // Check coins (hit area: ~P*4 around center)
+    for (let i = 0; i < this.coins.length; i++) {
+      const c = this.coins[i];
+      if (c.popping) continue;
+      const dx = mx - c.g.x, dy = my - c.g.y;
+      if (Math.abs(dx) < P * 5 && Math.abs(dy) < P * 5) {
+        this.popCoin(c, i);
+        return;
+      }
+    }
+
+    // Check clouds (hit area based on cloud size)
+    for (let i = 0; i < this.clouds.length; i++) {
+      const c = this.clouds[i];
+      if (c.popping) continue;
+      const hitW = (c.size || 4) * P * 1.2;
+      const dx = mx - c.g.x, dy = my - c.g.y;
+      if (Math.abs(dx) < hitW && Math.abs(dy) < P * 4) {
+        this.popCloud(c, i);
+        return;
+      }
+    }
+
+    // Check castle
+    const ccx = this.castleCX, cgy = this.castleGroundY;
+    const cw = P * 16, ch = P * 36; // total castle height including tower
+    if (mx > ccx - cw / 2 - P * 4 && mx < ccx + cw / 2 + P * 4 &&
+        my > cgy - ch - P * 10 && my < cgy) {
+      this.spawnRunner();
+    }
+  }
+
+  spawnRunner() {
+    const P = PIXEL;
+    const groundY = this.castleGroundY;
+    const doorX = this.castleCX;
+    const dir = Math.random() > 0.5 ? 1 : -1;
+    const colors = [
+      { body: 0x3366cc, head: 0xffcc88 },  // blue knight
+      { body: 0xcc3333, head: 0xffcc88 },  // red knight
+      { body: 0x33aa33, head: 0xffcc88 },  // green knight
+      { body: 0xff9900, head: 0xffcc88 },  // orange knight
+      { body: 0x9933cc, head: 0xffcc88 },  // purple knight
+    ];
+    const c = Phaser.Utils.Array.GetRandom(colors);
+    const g = this.add.graphics().setPosition(doorX, groundY - P * 6).setDepth(5.5);
+    const runner = {
+      g, dir,
+      x: doorX,
+      y: groundY - P * 6,
+      speed: Phaser.Math.FloatBetween(1.5, 3.0),
+      frame: 0,
+      frameTimer: 0,
+      color: c,
+      jumpPhase: 0,
+      alive: true,
+    };
+    // Door opening flash
+    const flash = this.add.graphics().setDepth(5);
+    flash.fillStyle(0xffdd88, 0.8);
+    flash.fillRect(doorX - P * 2, groundY - P * 6, P * 4, P * 6);
+    this.tweens.add({ targets: flash, alpha: 0, duration: 300, onComplete: () => flash.destroy() });
+
+    this.runners.push(runner);
+  }
+
+  drawRunner(r, time) {
+    const P = PIXEL;
+    const g = r.g;
+    g.clear();
+    g.setPosition(r.x, r.y);
+
+    const bounce = Math.abs(Math.sin(r.jumpPhase)) * P * 2;
+
+    // Legs (animated)
+    const legSpread = Math.sin(r.jumpPhase * 2) * P * 1.5;
+    g.fillStyle(r.color.body, 1);
+    g.fillRect(-P + legSpread, P * 2 - bounce, P, P * 2);  // left leg
+    g.fillRect(0 - legSpread, P * 2 - bounce, P, P * 2);    // right leg
+
+    // Body
+    g.fillStyle(r.color.body, 1);
+    g.fillRect(-P, -bounce, P * 2, P * 3);
+
+    // Head
+    g.fillStyle(r.color.head, 1);
+    g.fillRect(-P, -P * 2 - bounce, P * 2, P * 2);
+
+    // Eyes (looking in run direction)
+    g.fillStyle(0x222222, 1);
+    g.fillRect(r.dir > 0 ? 0 : -P, -P * 1.5 - bounce, P * 0.6, P * 0.6);
+
+    // Arms (swinging)
+    const armSwing = Math.sin(r.jumpPhase * 2) * P * 1.5;
+    g.fillStyle(r.color.body, 1);
+    g.fillRect(-P * 2, -bounce + armSwing, P, P * 1.5);   // left arm
+    g.fillRect(P, -bounce - armSwing, P, P * 1.5);         // right arm
+
+    // Exclamation mark above head when just spawned
+    if (r.frameTimer < 30) {
+      g.fillStyle(0xffdd33, 1);
+      g.fillRect(0, -P * 4.5 - bounce, P, P * 2);
+      g.fillRect(0, -P * 2.2 - bounce, P, P * 0.6);
+    }
+  }
+
+  popCoin(coin, idx) {
+    coin.popping = true;
+    const P = PIXEL;
+    const cx = coin.g.x, cy = coin.g.y;
+
+    // Sparkle particles
+    for (let i = 0; i < 6; i++) {
+      const spark = this.add.graphics().setDepth(10);
+      const angle = (i / 6) * Math.PI * 2;
+      const speed = Phaser.Math.Between(60, 140);
+      spark.fillStyle(Phaser.Utils.Array.GetRandom([0xffc040, 0xffdd33, 0xffffff]), 1);
+      spark.fillRect(-P, -P, P * 2, P * 2);
+      spark.setPosition(cx, cy);
+      this.tweens.add({
+        targets: spark,
+        x: cx + Math.cos(angle) * speed,
+        y: cy + Math.sin(angle) * speed - 30,
+        alpha: 0,
+        scale: 0.3,
+        duration: 400,
+        ease: 'Power2',
+        onComplete: () => spark.destroy(),
+      });
+    }
+
+    // Score text "+1"
+    const txt = this.add.graphics().setDepth(11).setPosition(cx, cy);
+    txt.fillStyle(0xffc040, 1);
+    txt.fillRect(-P, -P * 3, P * 2, P * 2); // simple pixel "+"
+    txt.fillRect(-P * 2, -P * 2, P * 4, P);
+    this.tweens.add({
+      targets: txt, y: cy - 40, alpha: 0, duration: 600, ease: 'Power1',
+      onComplete: () => txt.destroy(),
+    });
+
+    // Scale down and destroy
+    this.tweens.add({
+      targets: coin.g, scaleX: 1.5, scaleY: 1.5, alpha: 0, duration: 250, ease: 'Back.easeIn',
+      onComplete: () => {
+        coin.g.destroy();
+        // Respawn at new position
+        const groundY = H - PIXEL * 8;
+        const nx = Phaser.Math.Between(P * 4, W - P * 4);
+        const ny = Phaser.Math.Between(groundY - P * 30, groundY - P * 12);
+        const ng = this.add.graphics().setPosition(nx, ny).setDepth(5);
+        ng.scaleX = 0; ng.scaleY = 0;
+        this.coins[idx] = { g: ng, baseY: ny, phase: Math.random() * Math.PI * 2, popping: false };
+        // Pop-in animation
+        this.tweens.add({ targets: ng, scaleX: 1, scaleY: 1, duration: 300, ease: 'Back.easeOut' });
+      }
+    });
+  }
+
+  popCloud(cloud, idx) {
+    cloud.popping = true;
+    const cx = cloud.g.x, cy = cloud.g.y;
+    const P = PIXEL;
+
+    // Puff particles (white pixel squares)
+    for (let i = 0; i < 8; i++) {
+      const puff = this.add.graphics().setDepth(10);
+      const angle = (i / 8) * Math.PI * 2;
+      const dist = Phaser.Math.Between(30, 80);
+      const sz = Phaser.Math.Between(2, 5);
+      puff.fillStyle(0xffffff, 0.8);
+      puff.fillRect(-sz * P / 2, -sz * P / 2, sz * P, sz * P);
+      puff.setPosition(cx, cy);
+      this.tweens.add({
+        targets: puff,
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        alpha: 0,
+        scale: 0.2,
+        duration: 500,
+        ease: 'Power2',
+        onComplete: () => puff.destroy(),
+      });
+    }
+
+    // Squish and disappear
+    this.tweens.add({
+      targets: cloud.g, scaleX: 1.3, scaleY: 0.3, alpha: 0, duration: 300, ease: 'Power2',
+      onComplete: () => {
+        cloud.g.destroy();
+        // Respawn new cloud
+        const nc = this.createCloud();
+        nc.g.x = Phaser.Math.Between(0, W);
+        nc.g.scaleX = 0; nc.g.scaleY = 0;
+        nc.popping = false;
+        this.clouds[idx] = nc;
+        this.tweens.add({ targets: nc.g, scaleX: 1, scaleY: 1, duration: 400, ease: 'Back.easeOut', delay: 300 });
+      }
+    });
+  }
+
+  drawPixelSun(g, x, y, alpha) {
+    const P = PIXEL;
+    g.clear();
+    // Core
+    g.fillStyle(0xffdd33, alpha);
+    g.fillRect(x - P * 3, y - P * 3, P * 6, P * 6);
+    g.fillStyle(0xffee88, alpha);
+    g.fillRect(x - P * 2, y - P * 2, P * 4, P * 4);
+    // Rays
+    g.fillStyle(0xffdd33, alpha * 0.7);
+    g.fillRect(x - P, y - P * 5, P * 2, P * 2);
+    g.fillRect(x - P, y + P * 3, P * 2, P * 2);
+    g.fillRect(x - P * 5, y - P, P * 2, P * 2);
+    g.fillRect(x + P * 3, y - P, P * 2, P * 2);
+    // Diagonal rays
+    g.fillRect(x + P * 2.5, y - P * 4, P * 1.5, P * 1.5);
+    g.fillRect(x - P * 4, y - P * 4, P * 1.5, P * 1.5);
+    g.fillRect(x + P * 2.5, y + P * 2.5, P * 1.5, P * 1.5);
+    g.fillRect(x - P * 4, y + P * 2.5, P * 1.5, P * 1.5);
+  }
+
+  drawCoin(g, frame) {
+    const P = PIXEL;
+    const widths = [3, 2.5, 1.5, 2.5]; // animation frames
+    const w = widths[frame % 4];
+    g.clear();
+    g.fillStyle(0xf0a020, 1);
+    g.fillRect(-w * P / 2, -P * 2, w * P, P * 4);
+    g.fillStyle(0xffc040, 1);
+    g.fillRect(-w * P / 2 + P * 0.3, -P * 1.5, w * P * 0.5, P * 3);
+  }
+
+  update(time, delta) {
+    const dt = delta / 1000;
+    smoothWindX *= WIND_DECAY;
+    smoothWindY *= WIND_DECAY;
+
+    // Clouds drift
+    this.clouds.forEach(c => {
+      c.g.x += c.speed + smoothWindX * 15 * dt;
+      if (c.g.x > W + 100) c.g.x = -100;
+      if (c.g.x < -150) c.g.x = W + 100;
+    });
+
+    // Coins bob + spin
+    this.coinFrame = Math.floor(time / 200);
+    this.coins.forEach(c => {
+      c.phase += 0.03;
+      c.g.y = c.baseY + Math.sin(c.phase) * PIXEL * 1.5;
+      this.drawCoin(c.g, this.coinFrame);
+    });
+
+    // Runners
+    this.runners = this.runners.filter(r => {
+      r.frameTimer++;
+      r.jumpPhase += 0.12;
+      r.x += r.dir * r.speed;
+      this.drawRunner(r, time);
+      // Remove when off screen
+      if (r.x < -50 || r.x > W + 50) { r.g.destroy(); return false; }
+      return true;
+    });
+
+    // Sun
+    const sp = getSunPos();
+    this.drawPixelSun(this.sunG, sp.x, sp.y, sp.alpha);
+  }
+}
+
+new Phaser.Game({
+  type: Phaser.AUTO, width: W, height: H, transparent: true,
+  scene: PixelGameScene, banner: false,
+  scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
+});
+</script>
+</body></html>

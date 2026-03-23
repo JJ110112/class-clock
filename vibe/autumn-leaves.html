@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; }
+  body { overflow:hidden; background: linear-gradient(180deg, #e8d5b8 0%, #f5e6d0 40%, #faf0e0 100%); cursor:default; }
+</style>
+</head>
+<body>
+<script src="../phaser.min.js"></script>
+<script>
+/* ═══════════════════════════════
+   秋楓 – Autumn Leaves (daytime)
+   ═══════════════════════════════ */
+
+let smoothWindX = 0, smoothWindY = 0;
+const WIND_DECAY = 0.90, WIND_GAIN = 2.0;
+let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
+
+const DENSITIES = [
+  { label: '微風落葉', count: 25 },
+  { label: '秋風掃落葉', count: 55 },
+  { label: '落葉繽紛',   count: 120 },
+];
+let densityIdx = 1;
+let scene = null;
+
+function onMouseMove(d) {
+  smoothWindX += d.windVX * d.windStrength * WIND_GAIN;
+  smoothWindY += d.windVY * d.windStrength * WIND_GAIN;
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data.type === 'mousemove') onMouseMove(e.data);
+  if (e.data.type === 'time') { currentHour = e.data.hours; currentMin = e.data.minutes; }
+  if (e.data.type === 'density') {
+    densityIdx = (densityIdx + e.data.dir + DENSITIES.length) % DENSITIES.length;
+    if (scene) scene.rebuildLeaves();
+    parent.postMessage({ type: 'densityLabel', label: DENSITIES[densityIdx].label }, '*');
+  }
+});
+
+const W = window.innerWidth, H = window.innerHeight;
+const LEAF_COLORS = [0xfb923c, 0xf97316, 0xef4444, 0xfbbf24, 0xb45309, 0xdc2626];
+
+// Sun arc: 6h→rise left, 12h→top, 18h→set right
+function getSunPos() {
+  const t = currentHour + currentMin / 60;
+  const prog = (t - 6) / 12; // 0→1 over 6:00–18:00
+  const p = Phaser.Math.Clamp(prog, 0, 1);
+  return {
+    x: Phaser.Math.Linear(W * 0.08, W * 0.92, p),
+    y: H * 0.15 - Math.sin(p * Math.PI) * H * 0.1,
+    alpha: p > 0 && p < 1 ? 0.65 : 0.1,
+  };
+}
+
+class AutumnScene extends Phaser.Scene {
+  constructor() { super('autumn'); }
+
+  create() {
+    scene = this;
+    const bg = this.add.graphics();
+    bg.fillGradientStyle(0xe8d5b8, 0xf0dcc0, 0xf5e6d0, 0xfaf0e0, 1);
+    bg.fillRect(0, 0, W, H).setDepth(-10);
+
+    this.sunGlowOuter = this.add.circle(0, 0, 80, 0xfbbf24, 0.08).setDepth(3);
+    this.sunGlow = this.add.circle(0, 0, 45, 0xfbbf24, 0.15).setDepth(4);
+    this.sun = this.add.circle(0, 0, 22, 0xfbbf24, 0.6).setDepth(5);
+
+    this.leaves = [];
+    this.rebuildLeaves();
+
+    // Piled leaves
+    this.piledG = this.add.graphics().setDepth(1);
+    this.piled = [];
+  }
+
+  rebuildLeaves() {
+    this.leaves.forEach(l => l.g.destroy());
+    this.leaves = [];
+    const count = DENSITIES[densityIdx].count;
+    for (let i = 0; i < count; i++) this.leaves.push(this.createLeaf(true));
+  }
+
+  createLeaf(init) {
+    const x = Phaser.Math.Between(-30, W + 30);
+    const y = init ? Phaser.Math.Between(0, H) : Phaser.Math.Between(-60, -5);
+    const size = Phaser.Math.FloatBetween(4, 10);
+    const color = Phaser.Utils.Array.GetRandom(LEAF_COLORS);
+    const g = this.add.graphics();
+    g.fillStyle(color, Phaser.Math.FloatBetween(0.5, 0.85));
+    g.beginPath(); g.moveTo(0,-size); g.lineTo(size*0.6,0); g.lineTo(0,size); g.lineTo(-size*0.6,0); g.closePath(); g.fillPath();
+    g.lineStyle(0.5, color, 0.3); g.lineBetween(0, -size*0.7, 0, size*0.7);
+    g.setPosition(x, y).setDepth(2);
+    return {
+      g, size,
+      speed: Phaser.Math.FloatBetween(0.8, 2.0),
+      swingPhase: Phaser.Math.FloatBetween(0, Math.PI * 2),
+      swingSpeed: Phaser.Math.FloatBetween(0.005, 0.02),
+      swingAmp: Phaser.Math.FloatBetween(1, 3.5),
+      rotSpeed: Phaser.Math.FloatBetween(-0.04, 0.04),
+    };
+  }
+
+  update(time, delta) {
+    const dt = delta / 1000;
+    smoothWindX *= WIND_DECAY;
+    smoothWindY *= WIND_DECAY;
+
+    const groundY = H - 8;
+    this.leaves.forEach(l => {
+      l.swingPhase += l.swingSpeed;
+      l.g.x += Math.sin(l.swingPhase) * l.swingAmp + smoothWindX * 60 * dt;
+      l.g.y += l.speed + smoothWindY * 20 * dt;
+      l.g.rotation += l.rotSpeed + smoothWindX * 0.015;
+      if (l.g.y > groundY) {
+        if (this.piled.length < 100) {
+          this.piled.push({
+            x: l.g.x, y: groundY - Phaser.Math.FloatBetween(0, 10),
+            size: l.size, color: Phaser.Utils.Array.GetRandom(LEAF_COLORS),
+            rot: Phaser.Math.FloatBetween(0, Math.PI * 2),
+            alpha: 0.7, age: 0,
+          });
+        }
+        l.g.x = Phaser.Math.Between(0, W); l.g.y = Phaser.Math.Between(-60, -5);
+      }
+      if (l.g.x < -60 || l.g.x > W + 60) {
+        l.g.x = Phaser.Math.Between(0, W); l.g.y = Phaser.Math.Between(-60, -5);
+      }
+    });
+
+    // Piled leaves on ground
+    this.piledG.clear();
+    this.piled = this.piled.filter(p => {
+      p.age += dt;
+      if (p.age > 5) p.alpha -= dt * 0.25;
+      if (p.alpha <= 0) return false;
+      const g = this.piledG;
+      g.save();
+      g.fillStyle(p.color, p.alpha * 0.55);
+      // Flat leaf shape
+      g.fillEllipse(p.x, p.y, p.size * 1.8, p.size * 0.6);
+      // Vein
+      g.lineStyle(0.5, p.color, p.alpha * 0.25);
+      g.lineBetween(p.x - p.size * 0.6, p.y, p.x + p.size * 0.6, p.y);
+      g.restore();
+      return true;
+    });
+
+    // Sun follows time
+    const sp = getSunPos();
+    this.sun.x = Phaser.Math.Linear(this.sun.x, sp.x, 0.02);
+    this.sun.y = Phaser.Math.Linear(this.sun.y, sp.y, 0.02);
+    this.sun.alpha = sp.alpha;
+    this.sunGlow.setPosition(this.sun.x, this.sun.y);
+    this.sunGlowOuter.setPosition(this.sun.x, this.sun.y);
+    const pulse = (Math.sin(time * 0.002) + 1) / 2;
+    this.sunGlow.alpha = sp.alpha * (0.15 + pulse * 0.08);
+    this.sunGlowOuter.alpha = sp.alpha * (0.05 + pulse * 0.04);
+  }
+}
+
+new Phaser.Game({
+  type: Phaser.AUTO, width: W, height: H, transparent: true,
+  scene: AutumnScene, banner: false,
+  scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
+});
+</script>
+</body></html>

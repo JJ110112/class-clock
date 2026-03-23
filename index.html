@@ -319,12 +319,92 @@
       width:7px; height:7px; border-radius:50%;
       background:var(--purple); box-shadow:var(--glowP); flex-shrink:0;
     }
+
+    /* ── SCENE SWITCHER (右上角) ── */
+    .scene-switcher {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 10;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 10px;
+      opacity: 0.45;
+      transition: opacity .3s;
+    }
+    .scene-switcher:hover { opacity: 1; }
+    .scene-row {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(6px);
+    }
+    .scene-btn {
+      font-family: 'Noto Sans TC', sans-serif;
+      font-size: clamp(0.55rem, 1.4vw, 0.72rem);
+      padding: 5px 12px;
+      border: none;
+      background: transparent;
+      color: var(--dim);
+      cursor: pointer;
+      letter-spacing: 0.08em;
+      transition: all .25s;
+      position: relative;
+    }
+    .scene-btn + .scene-btn { border-left: 1px solid var(--border); }
+    .scene-btn.active-spring { color: #ffb7c5; background: rgba(255,183,197,0.15); text-shadow: 0 0 8px rgba(255,183,197,0.4); }
+    .scene-btn.active-summer { color: #4ade80; background: rgba(74,222,128,0.15); text-shadow: 0 0 8px rgba(74,222,128,0.4); }
+    .scene-btn.active-autumn { color: #fb923c; background: rgba(251,146,60,0.15); text-shadow: 0 0 8px rgba(251,146,60,0.4); }
+    .scene-btn.active-winter { color: #e2e8f0; background: rgba(226,232,240,0.12); text-shadow: 0 0 8px rgba(226,232,240,0.4); }
+    .scene-btn.active-sunrise { color: #fbbf24; background: rgba(251,191,36,0.12); text-shadow: 0 0 8px rgba(251,191,36,0.3); }
+    .scene-btn.active-sunny   { color: #facc15; background: rgba(250,204,21,0.12); text-shadow: 0 0 8px rgba(250,204,21,0.3); }
+    .scene-btn.active-rainy   { color: #60a5fa; background: rgba(96,165,250,0.12); text-shadow: 0 0 8px rgba(96,165,250,0.3); }
+    .scene-btn.active-night   { color: #a78bfa; background: rgba(167,139,250,0.12); text-shadow: 0 0 8px rgba(167,139,250,0.3); }
+    .scene-group {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+    }
+    .scene-label {
+      font-size: clamp(0.5rem, 1.2vw, 0.62rem);
+      color: var(--dim);
+      letter-spacing: 0.15em;
+      opacity: 0.7;
+      margin-right: 4px;
+    }
   </style>
 </head>
 <body>
 <div id="canvas-container">
   <canvas id="sakura-canvas"></canvas>
 </div>
+<!-- SCENE SWITCHER (右上角固定) -->
+<div class="scene-switcher">
+  <div class="scene-group">
+    <div class="scene-label">季節</div>
+    <div class="scene-row">
+      <button class="scene-btn active-spring" data-season="spring" id="btnSpring">🌸 春</button>
+      <button class="scene-btn" data-season="summer" id="btnSummer">🌻 夏</button>
+      <button class="scene-btn" data-season="autumn" id="btnAutumn">🍂 秋</button>
+      <button class="scene-btn" data-season="winter" id="btnWinter">❄️ 冬</button>
+    </div>
+  </div>
+  <div class="scene-group">
+    <div class="scene-label">天氣</div>
+    <div class="scene-row">
+      <button class="scene-btn active-sunrise" data-weather="sunrise" id="btnSunrise">🌅 日出</button>
+      <button class="scene-btn" data-weather="sunny" id="btnSunny">☀️ 晴天</button>
+      <button class="scene-btn" data-weather="rainy" id="btnRainy">🌧️ 下雨</button>
+      <button class="scene-btn" data-weather="night" id="btnNight">🌙 夜晚</button>
+    </div>
+  </div>
+</div>
+
 <div class="container">
 
   <!-- MODE SWITCHER -->
@@ -768,93 +848,456 @@
   setInterval(tick, 1000);
 
   // ═══════════════════════════════════
-  //  櫻花飛舞動畫邏輯
+  //  場景與天氣系統
   // ═══════════════════════════════════
   const canvas = document.getElementById('sakura-canvas');
   const ctx = canvas.getContext('2d');
+  let width, height, particles = [], weatherParticles = [];
 
-  let width, height, petals;
+  // ── 場景狀態 ──
+  let currentSeason  = localStorage.getItem('season')  || 'spring';
+  let currentWeather = localStorage.getItem('weather') || 'sunrise';
 
-  // Petal configuration
-  const PETAL_COUNT = 60;
-  const COLORS = ['#ffb7c5', '#ffc0cb', '#ffe4e1', '#ff99aa'];
+  // ── 季節定義 ──
+  const SEASONS = {
+    spring: {
+      colors: ['#ffb7c5','#ffc0cb','#ffe4e1','#ff99aa'],
+      accent: '#ffb7c5', accent2: '#ff7eb9',
+      bg: '#0a0507', dim: '#a18a93', border: '#3a1c28',
+      count: 60, type: 'petal',
+    },
+    summer: {
+      colors: ['#4ade80','#86efac','#bbf7d0','#fbbf24'],
+      accent: '#4ade80', accent2: '#22c55e',
+      bg: '#050a07', dim: '#8aa193', border: '#1c3a28',
+      count: 40, type: 'firefly',
+    },
+    autumn: {
+      colors: ['#fb923c','#f97316','#ef4444','#fbbf24','#b45309'],
+      accent: '#fb923c', accent2: '#f97316',
+      bg: '#0a0705', dim: '#a1938a', border: '#3a281c',
+      count: 50, type: 'leaf',
+    },
+    winter: {
+      colors: ['#ffffff','#f1f5f9','#e2e8f0','#f8fafc','#cbd5e1'],
+      accent: '#e2e8f0', accent2: '#f1f5f9',
+      bg: '#080a0f', dim: '#94a3b8', border: '#1e293b',
+      count: 80, type: 'snow',
+    },
+  };
 
-  function initCanvas() {
-    width = canvas.width = window.innerWidth;
-    height = canvas.height = window.innerHeight;
-    petals = [];
-    for (let i = 0; i < PETAL_COUNT; i++) {
-      petals.push(new Petal());
-    }
+  // ── 天氣定義 ──
+  const WEATHERS = {
+    sunrise: {
+      bgGrad: (s) => [
+        [0, `rgba(${s==='winter'?'40,50,80':'80,30,20'},0.3)`],
+        [0.5, `rgba(${s==='winter'?'60,40,50':'120,60,20'},0.15)`],
+        [1, 'rgba(10,5,7,0.6)'],
+      ],
+      extraCount: 0,
+    },
+    sunny: {
+      bgGrad: (s) => [
+        [0, `rgba(${s==='winter'?'40,45,60':'60,45,15'},0.15)`],
+        [0.6, `rgba(${s==='winter'?'15,18,30':'25,18,8'},0.4)`],
+        [1, `rgba(${s==='winter'?'5,7,12':'8,6,3'},0.75)`],
+      ],
+      extraCount: 6,
+      extraType: 'sunray',
+    },
+    rainy: {
+      bgGrad: () => [
+        [0, 'rgba(15,20,30,0.3)'],
+        [1, 'rgba(3,5,12,0.9)'],
+      ],
+      extraCount: 300,
+      extraType: 'rain',
+    },
+    night: {
+      bgGrad: () => [
+        [0, 'rgba(5,5,20,0.1)'],
+        [1, 'rgba(2,2,10,0.9)'],
+      ],
+      extraCount: 80,
+      extraType: 'star',
+    },
+  };
+
+  // ── 季節主題色套用 ──
+  function applySeasonTheme(season) {
+    const s = SEASONS[season];
+    const root = document.documentElement.style;
+    root.setProperty('--accent', s.accent);
+    root.setProperty('--accent2', s.accent2);
+    root.setProperty('--bg', s.bg);
+    root.setProperty('--dim', s.dim);
+    root.setProperty('--border', s.border);
+    root.setProperty('--glow', `0 0 10px ${s.accent}99, 0 0 20px ${s.accent2}66, 0 0 40px ${s.accent2}33`);
+    root.setProperty('--glow2', `0 0 20px ${s.accent2}80`);
+    document.body.style.background = s.bg;
   }
 
-  class Petal {
-    constructor() {
-      this.reset();
-    }
+  // ── 粒子基類 ──
+  class Particle {
+    constructor(type) { this.type = type; this.reset(true); }
 
-    reset() {
+    reset(init) {
       this.x = Math.random() * width;
-      this.y = Math.random() * height - height;
-      this.size = Math.random() * 5 + 2;
-      this.speed = Math.random() * 1 + 0.5;
-      this.swing = Math.random() * 2;
-      this.swingSpeed = Math.random() * 0.02;
-      this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
-      this.opacity = Math.random() * 0.5 + 0.3;
-      this.flip = Math.random();
-      this.flipSpeed = Math.random() * 0.03;
+      this.color = SEASONS[currentSeason].colors[
+        Math.floor(Math.random() * SEASONS[currentSeason].colors.length)
+      ];
+      switch(this.type) {
+        case 'petal':
+          this.y = init ? Math.random() * height : -10;
+          this.size = Math.random() * 5 + 2;
+          this.speed = Math.random() * 1 + 0.5;
+          this.swing = Math.random() * 2;
+          this.swingSpeed = Math.random() * 0.02;
+          this.opacity = Math.random() * 0.5 + 0.3;
+          this.flip = Math.random();
+          this.flipSpeed = Math.random() * 0.03;
+          break;
+        case 'leaf':
+          this.y = init ? Math.random() * height : -20;
+          this.size = Math.random() * 8 + 4;
+          this.speed = Math.random() * 1.5 + 0.8;
+          this.swing = Math.random() * 3;
+          this.swingSpeed = Math.random() * 0.015 + 0.005;
+          this.opacity = Math.random() * 0.4 + 0.4;
+          this.rotation = Math.random() * Math.PI * 2;
+          this.rotSpeed = (Math.random() - 0.5) * 0.04;
+          break;
+        case 'snow':
+          this.y = init ? Math.random() * height : -5;
+          this.size = Math.random() * 4 + 1;
+          this.speed = Math.random() * 0.8 + 0.2;
+          this.swing = Math.random() * 2;
+          this.swingSpeed = Math.random() * 0.01 + 0.002;
+          this.opacity = Math.random() * 0.6 + 0.3;
+          break;
+        case 'firefly':
+          this.y = Math.random() * height;
+          this.size = Math.random() * 3 + 1;
+          this.speed = (Math.random() - 0.5) * 0.3;
+          this.speedX = (Math.random() - 0.5) * 0.3;
+          this.pulsePhase = Math.random() * Math.PI * 2;
+          this.pulseSpeed = Math.random() * 0.03 + 0.01;
+          this.opacity = 0;
+          break;
+        case 'rain':
+          this.y = init ? Math.random() * height : Math.random() * -100;
+          this.x = Math.random() * (width + 200) - 100;
+          this.size = Math.random() * 18 + 14;
+          this.speed = Math.random() * 10 + 16;
+          this.opacity = Math.random() * 0.4 + 0.2;
+          this.color = '#93c5fd';
+          this.thick = Math.random() * 1.5 + 0.5;
+          break;
+        case 'star':
+          this.y = Math.random() * height;
+          this.size = Math.random() * 2 + 0.5;
+          this.speed = 0;
+          this.pulsePhase = Math.random() * Math.PI * 2;
+          this.pulseSpeed = Math.random() * 0.02 + 0.005;
+          this.opacity = Math.random() * 0.6 + 0.2;
+          this.color = '#e2e8f0';
+          break;
+        case 'sunray':
+          this.x = width * 0.15;
+          this.y = height * 0.08;
+          this.angle = (Math.PI * 0.15) + (Math.random() * Math.PI * 0.55);
+          this.length = Math.max(width, height) * (Math.random() * 0.4 + 0.8);
+          this.rayWidth = Math.random() * 30 + 15;
+          this.pulsePhase = Math.random() * Math.PI * 2;
+          this.pulseSpeed = Math.random() * 0.008 + 0.003;
+          this.opacity = 0;
+          this.color = '#fbbf24';
+          break;
+      }
     }
 
     update() {
-      this.y += this.speed;
-      this.x += Math.sin(this.swing);
-      this.swing += this.swingSpeed;
-      this.flip += this.flipSpeed;
-
-      if (this.y > height) {
-        this.reset();
+      switch(this.type) {
+        case 'petal':
+          this.y += this.speed;
+          this.x += Math.sin(this.swing);
+          this.swing += this.swingSpeed;
+          this.flip += this.flipSpeed;
+          if (this.y > height) this.reset();
+          break;
+        case 'leaf':
+          this.y += this.speed;
+          this.x += Math.sin(this.swing) * 1.5;
+          this.swing += this.swingSpeed;
+          this.rotation += this.rotSpeed;
+          if (this.y > height + 20) this.reset();
+          break;
+        case 'snow':
+          this.y += this.speed;
+          this.x += Math.sin(this.swing) * 0.5;
+          this.swing += this.swingSpeed;
+          if (this.y > height) this.reset();
+          break;
+        case 'firefly':
+          this.y += this.speed;
+          this.x += this.speedX;
+          this.pulsePhase += this.pulseSpeed;
+          this.opacity = (Math.sin(this.pulsePhase) + 1) / 2 * 0.8;
+          if (this.x < 0 || this.x > width) this.speedX *= -1;
+          if (this.y < 0 || this.y > height) this.speed *= -1;
+          break;
+        case 'rain':
+          this.y += this.speed;
+          this.x -= this.speed * 0.15;
+          if (this.y > height) this.reset();
+          break;
+        case 'star':
+          this.pulsePhase += this.pulseSpeed;
+          this.opacity = (Math.sin(this.pulsePhase) + 1) / 2 * 0.7 + 0.1;
+          break;
+        case 'sunray':
+          this.pulsePhase += this.pulseSpeed;
+          this.opacity = (Math.sin(this.pulsePhase) + 1) / 2 * 0.06 + 0.02;
+          break;
       }
     }
 
     draw() {
       ctx.save();
-      ctx.translate(this.x, this.y);
-      ctx.rotate(this.swing);
-      // Draw petal shape (ellipse-like)
-      ctx.scale(Math.sin(this.flip), 1);
-      ctx.beginPath();
-      ctx.fillStyle = this.color;
       ctx.globalAlpha = this.opacity;
-
-      // Draw a simple heart/petal shape
-      ctx.moveTo(0, 0);
-      ctx.bezierCurveTo(this.size, -this.size, this.size * 2, this.size, 0, this.size * 2);
-      ctx.bezierCurveTo(-this.size * 2, this.size, -this.size, -this.size, 0, 0);
-
-      ctx.fill();
+      switch(this.type) {
+        case 'petal':
+          ctx.translate(this.x, this.y);
+          ctx.rotate(this.swing);
+          ctx.scale(Math.sin(this.flip), 1);
+          ctx.beginPath();
+          ctx.fillStyle = this.color;
+          ctx.moveTo(0, 0);
+          ctx.bezierCurveTo(this.size, -this.size, this.size*2, this.size, 0, this.size*2);
+          ctx.bezierCurveTo(-this.size*2, this.size, -this.size, -this.size, 0, 0);
+          ctx.fill();
+          break;
+        case 'leaf':
+          ctx.translate(this.x, this.y);
+          ctx.rotate(this.rotation);
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.moveTo(0, -this.size);
+          ctx.bezierCurveTo(this.size*0.8, -this.size*0.3, this.size*0.6, this.size*0.5, 0, this.size);
+          ctx.bezierCurveTo(-this.size*0.6, this.size*0.5, -this.size*0.8, -this.size*0.3, 0, -this.size);
+          ctx.fill();
+          // leaf vein
+          ctx.strokeStyle = this.color;
+          ctx.globalAlpha = this.opacity * 0.4;
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(0, -this.size * 0.8);
+          ctx.lineTo(0, this.size * 0.8);
+          ctx.stroke();
+          break;
+        case 'snow':
+          ctx.translate(this.x, this.y);
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+          ctx.fill();
+          // glow
+          ctx.globalAlpha = this.opacity * 0.3;
+          ctx.beginPath();
+          ctx.arc(0, 0, this.size * 2, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(200,220,255,0.2)';
+          ctx.fill();
+          break;
+        case 'firefly':
+          ctx.translate(this.x, this.y);
+          // outer glow
+          const grd = ctx.createRadialGradient(0,0,0, 0,0, this.size*4);
+          grd.addColorStop(0, this.color);
+          grd.addColorStop(1, 'transparent');
+          ctx.fillStyle = grd;
+          ctx.fillRect(-this.size*4, -this.size*4, this.size*8, this.size*8);
+          // core
+          ctx.globalAlpha = this.opacity + 0.2;
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(0, 0, this.size * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        case 'rain':
+          ctx.strokeStyle = this.color;
+          ctx.lineWidth = this.thick;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(this.x, this.y);
+          ctx.lineTo(this.x - this.speed * 0.12, this.y + this.size);
+          ctx.stroke();
+          // splash when near bottom
+          if (this.y > height - 30) {
+            ctx.globalAlpha = this.opacity * 0.6;
+            ctx.beginPath();
+            ctx.arc(this.x - this.speed * 0.12, height - 2, Math.random() * 2 + 1, 0, Math.PI, true);
+            ctx.stroke();
+          }
+          break;
+        case 'star':
+          ctx.translate(this.x, this.y);
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+          ctx.fill();
+          // twinkle cross
+          ctx.globalAlpha = this.opacity * 0.5;
+          ctx.strokeStyle = this.color;
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(-this.size*2, 0); ctx.lineTo(this.size*2, 0);
+          ctx.moveTo(0, -this.size*2); ctx.lineTo(0, this.size*2);
+          ctx.stroke();
+          break;
+        case 'sunray':
+          ctx.translate(this.x, this.y);
+          ctx.rotate(this.angle);
+          const rayGrad = ctx.createLinearGradient(0, 0, this.length, 0);
+          rayGrad.addColorStop(0, 'rgba(251,191,36,0.3)');
+          rayGrad.addColorStop(0.5, 'rgba(251,191,36,0.08)');
+          rayGrad.addColorStop(1, 'transparent');
+          ctx.fillStyle = rayGrad;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(this.length, -this.rayWidth);
+          ctx.lineTo(this.length, this.rayWidth);
+          ctx.closePath();
+          ctx.fill();
+          break;
+      }
       ctx.restore();
     }
   }
 
+  // ── 場景切換 ──
+  function setSeason(season) {
+    currentSeason = season;
+    localStorage.setItem('season', season);
+    ['btnSpring','btnSummer','btnAutumn','btnWinter'].forEach(id => {
+      document.getElementById(id).className = 'scene-btn';
+    });
+    document.getElementById('btn' + season.charAt(0).toUpperCase() + season.slice(1))
+      .className = 'scene-btn active-' + season;
+    applySeasonTheme(season);
+    rebuildParticles();
+  }
+
+  function setWeather(weather) {
+    currentWeather = weather;
+    localStorage.setItem('weather', weather);
+    ['btnSunrise','btnSunny','btnRainy','btnNight'].forEach(id => {
+      document.getElementById(id).className = 'scene-btn';
+    });
+    document.getElementById('btn' + weather.charAt(0).toUpperCase() + weather.slice(1))
+      .className = 'scene-btn active-' + weather;
+    rebuildParticles();
+  }
+
+  function rebuildParticles() {
+    const s = SEASONS[currentSeason];
+    const w = WEATHERS[currentWeather];
+    particles = [];
+    for (let i = 0; i < s.count; i++) particles.push(new Particle(s.type));
+    weatherParticles = [];
+    if (w.extraCount) {
+      for (let i = 0; i < w.extraCount; i++) weatherParticles.push(new Particle(w.extraType));
+    }
+  }
+
+  // ── 場景按鈕事件 ──
+  document.getElementById('btnSpring').addEventListener('click', () => setSeason('spring'));
+  document.getElementById('btnSummer').addEventListener('click', () => setSeason('summer'));
+  document.getElementById('btnAutumn').addEventListener('click', () => setSeason('autumn'));
+  document.getElementById('btnWinter').addEventListener('click', () => setSeason('winter'));
+  document.getElementById('btnSunrise').addEventListener('click', () => setWeather('sunrise'));
+  document.getElementById('btnSunny').addEventListener('click',   () => setWeather('sunny'));
+  document.getElementById('btnRainy').addEventListener('click',   () => setWeather('rainy'));
+  document.getElementById('btnNight').addEventListener('click',   () => setWeather('night'));
+
+  // ── Canvas 初始化 ──
+  function initCanvas() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+    rebuildParticles();
+  }
+
+  // ── 動畫主迴圈 ──
   function animate() {
     ctx.clearRect(0, 0, width, height);
 
-    // Gentle gradient background overlay for depth
+    // 背景漸層
+    const w = WEATHERS[currentWeather];
+    const stops = w.bgGrad(currentSeason);
     const grad = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, width);
-    grad.addColorStop(0, 'rgba(45, 10, 21, 0)');
-    grad.addColorStop(1, 'rgba(10, 5, 7, 0.8)');
+    stops.forEach(([pos, col]) => grad.addColorStop(pos, col));
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 
-    petals.forEach(petal => {
-      petal.update();
-      petal.draw();
-    });
+    // 晴天太陽
+    if (currentWeather === 'sunny') {
+      const sx = width * 0.15, sy = height * 0.08;
+      // sun glow
+      ctx.globalAlpha = 0.15;
+      const sunGlow = ctx.createRadialGradient(sx, sy, 0, sx, sy, 120);
+      sunGlow.addColorStop(0, '#fbbf24');
+      sunGlow.addColorStop(0.4, 'rgba(251,191,36,0.15)');
+      sunGlow.addColorStop(1, 'transparent');
+      ctx.fillStyle = sunGlow;
+      ctx.fillRect(sx-150, sy-150, 300, 300);
+      // sun disc
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(sx, sy, 22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 日出光芒效果
+    if (currentWeather === 'sunrise') {
+      const sunGrad = ctx.createRadialGradient(width/2, height, 0, width/2, height, height*0.8);
+      sunGrad.addColorStop(0, 'rgba(251,191,36,0.12)');
+      sunGrad.addColorStop(0.3, 'rgba(251,146,60,0.06)');
+      sunGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = sunGrad;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    // 夜晚月亮
+    if (currentWeather === 'night') {
+      const mx = width * 0.82, my = height * 0.12;
+      ctx.globalAlpha = 0.15;
+      const moonGlow = ctx.createRadialGradient(mx, my, 0, mx, my, 60);
+      moonGlow.addColorStop(0, '#e2e8f0');
+      moonGlow.addColorStop(1, 'transparent');
+      ctx.fillStyle = moonGlow;
+      ctx.fillRect(mx-80, my-80, 160, 160);
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = '#e2e8f0';
+      ctx.beginPath();
+      ctx.arc(mx, my, 18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 天氣粒子（背景層）
+    weatherParticles.forEach(p => { p.update(); p.draw(); });
+    // 季節粒子（前景層）
+    particles.forEach(p => { p.update(); p.draw(); });
+
     requestAnimationFrame(animate);
   }
 
   window.addEventListener('resize', initCanvas);
+
+  // 初始化場景
+  setSeason(currentSeason);
+  setWeather(currentWeather);
   initCanvas();
   animate();
 

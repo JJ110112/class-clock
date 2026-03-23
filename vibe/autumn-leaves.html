@@ -38,6 +38,7 @@ window.addEventListener('message', (e) => {
     if (scene) scene.rebuildLeaves();
     parent.postMessage({ type: 'densityLabel', label: DENSITIES[densityIdx].label }, '*');
   }
+  if (e.data.type === 'click' && scene) scene.spawnClickLeaves(e.data.x, e.data.y);
 });
 
 const W = window.innerWidth, H = window.innerHeight;
@@ -71,6 +72,9 @@ class AutumnScene extends Phaser.Scene {
     this.leaves = [];
     this.rebuildLeaves();
 
+    // Click-spawned leaves
+    this.clickLeaves = [];
+
     // Piled leaves
     this.piledG = this.add.graphics().setDepth(1);
     this.piled = [];
@@ -103,6 +107,45 @@ class AutumnScene extends Phaser.Scene {
     };
   }
 
+  spawnClickLeaves(cx, cy) {
+    const count = 12 + Math.floor(Math.random() * 8);
+    for (let i = 0; i < count; i++) {
+      const size = Phaser.Math.FloatBetween(5, 14);
+      const color = Phaser.Utils.Array.GetRandom(LEAF_COLORS);
+      const g = this.add.graphics().setDepth(8);
+      g.fillStyle(color, Phaser.Math.FloatBetween(0.6, 0.9));
+      // Maple-like leaf shape
+      g.beginPath();
+      g.moveTo(0, -size);
+      g.lineTo(size * 0.3, -size * 0.4);
+      g.lineTo(size * 0.8, -size * 0.3);
+      g.lineTo(size * 0.4, 0);
+      g.lineTo(size * 0.6, size * 0.5);
+      g.lineTo(0, size * 0.3);
+      g.lineTo(-size * 0.6, size * 0.5);
+      g.lineTo(-size * 0.4, 0);
+      g.lineTo(-size * 0.8, -size * 0.3);
+      g.lineTo(-size * 0.3, -size * 0.4);
+      g.closePath();
+      g.fillPath();
+      // Stem
+      g.lineStyle(0.8, color, 0.5);
+      g.lineBetween(0, -size * 0.5, 0, size * 0.3);
+      g.setPosition(cx, cy);
+
+      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const speed = Phaser.Math.FloatBetween(60, 200);
+      const maxLife = Phaser.Math.FloatBetween(2.5, 4.5);
+      this.clickLeaves.push({
+        g,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 50,
+        rotSpeed: Phaser.Math.FloatBetween(-0.08, 0.08),
+        life: maxLife, maxLife,
+      });
+    }
+  }
+
   update(time, delta) {
     const dt = delta / 1000;
     smoothWindX *= WIND_DECAY;
@@ -128,6 +171,18 @@ class AutumnScene extends Phaser.Scene {
       if (l.g.x < -60 || l.g.x > W + 60) {
         l.g.x = Phaser.Math.Between(0, W); l.g.y = Phaser.Math.Between(-60, -5);
       }
+    });
+
+    // Update click-spawned leaves
+    this.clickLeaves = this.clickLeaves.filter(cl => {
+      cl.life -= dt;
+      if (cl.life <= 0) { cl.g.destroy(); return false; }
+      cl.g.x += (cl.vx + smoothWindX * 50) * dt;
+      cl.g.y += (cl.vy) * dt;
+      cl.vy += 40 * dt; // gravity
+      cl.g.rotation += cl.rotSpeed + smoothWindX * 0.02;
+      cl.g.alpha = Math.min(1, cl.life / cl.maxLife * 1.5);
+      return true;
     });
 
     // Piled leaves on ground

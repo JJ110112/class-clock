@@ -38,6 +38,7 @@ window.addEventListener('message', (e) => {
     if (scene) scene.rebuildSnow();
     parent.postMessage({ type: 'densityLabel', label: DENSITIES[densityIdx].label }, '*');
   }
+  if (e.data.type === 'click' && scene) scene.spawnHexFlakes(e.data.x, e.data.y);
 });
 
 const W = window.innerWidth, H = window.innerHeight;
@@ -75,6 +76,9 @@ class WinterScene extends Phaser.Scene {
     this.snowflakes = [];
     this.rebuildSnow();
 
+    // Click-spawned hex snowflakes
+    this.hexFlakes = [];
+
     // Snow accumulation
     this.piledG = this.add.graphics().setDepth(0.5);
     this.piled = [];
@@ -104,6 +108,41 @@ class WinterScene extends Phaser.Scene {
       swingSpeed: Phaser.Math.FloatBetween(0.003, 0.012),
       swingAmp: Phaser.Math.FloatBetween(0.3, 1.8),
     };
+  }
+
+  spawnHexFlakes(cx, cy) {
+    const count = 10 + Math.floor(Math.random() * 8);
+    for (let i = 0; i < count; i++) {
+      const size = Phaser.Math.FloatBetween(6, 16);
+      const g = this.add.graphics().setDepth(8);
+      const color = Phaser.Utils.Array.GetRandom([0xffffff, 0xd0e8ff, 0xb8d4f0, 0xe8f4ff]);
+      g.lineStyle(1.2, color, Phaser.Math.FloatBetween(0.6, 1.0));
+      // Draw hexagonal snowflake: 6 branches with sub-branches
+      for (let b = 0; b < 6; b++) {
+        const angle = (b / 6) * Math.PI * 2;
+        const ex = Math.cos(angle) * size;
+        const ey = Math.sin(angle) * size;
+        g.lineBetween(0, 0, ex, ey);
+        // Sub-branches at 60% length
+        const mx = ex * 0.6, my = ey * 0.6;
+        const subLen = size * 0.35;
+        const a1 = angle + 0.5, a2 = angle - 0.5;
+        g.lineBetween(mx, my, mx + Math.cos(a1) * subLen, my + Math.sin(a1) * subLen);
+        g.lineBetween(mx, my, mx + Math.cos(a2) * subLen, my + Math.sin(a2) * subLen);
+      }
+      g.setPosition(cx, cy);
+
+      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const speed = Phaser.Math.FloatBetween(40, 150);
+      const maxLife = Phaser.Math.FloatBetween(2.0, 4.0);
+      this.hexFlakes.push({
+        g,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 30,
+        rotSpeed: Phaser.Math.FloatBetween(-0.06, 0.06),
+        life: maxLife, maxLife,
+      });
+    }
   }
 
   update(time, delta) {
@@ -141,6 +180,18 @@ class WinterScene extends Phaser.Scene {
       this.piledG.fillCircle(p.x, p.y, p.r * 1.5);
       this.piledG.fillStyle(0xe8f0ff, p.alpha * 0.25);
       this.piledG.fillCircle(p.x, p.y, p.r * 3);
+      return true;
+    });
+
+    // Update hex snowflakes from click
+    this.hexFlakes = this.hexFlakes.filter(f => {
+      f.life -= dt;
+      if (f.life <= 0) { f.g.destroy(); return false; }
+      f.g.x += (f.vx + smoothWindX * 20) * dt;
+      f.g.y += (f.vy + 30) * dt;
+      f.vy += 15 * dt; // gentle gravity
+      f.g.rotation += f.rotSpeed;
+      f.g.alpha = Math.min(1, f.life / f.maxLife * 1.5);
       return true;
     });
 

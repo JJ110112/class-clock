@@ -43,6 +43,7 @@ window.addEventListener('message', (e) => {
     if (scene) scene.rebuildPetals();
     parent.postMessage({ type: 'densityLabel', label: DENSITIES[densityIdx].label }, '*');
   }
+  if (e.data.type === 'click' && scene) scene.spawnClickBlossoms(e.data.x, e.data.y);
 });
 
 const W = window.innerWidth, H = window.innerHeight;
@@ -79,6 +80,9 @@ class YozakuraScene extends Phaser.Scene {
     this.petals = [];
     this.rebuildPetals();
 
+    // Click-spawned blossoms
+    this.clickBlossoms = [];
+
     // Piled petals on ground
     this.piledG = this.add.graphics().setDepth(1);
     this.piled = []; // { x, y, size, color, alpha, age }
@@ -110,6 +114,39 @@ class YozakuraScene extends Phaser.Scene {
     };
   }
 
+  spawnClickBlossoms(cx, cy) {
+    const count = 15 + Math.floor(Math.random() * 10);
+    for (let i = 0; i < count; i++) {
+      const size = Phaser.Math.FloatBetween(4, 12);
+      const color = Phaser.Utils.Array.GetRandom(COLORS);
+      const g = this.add.graphics().setDepth(8);
+      // 5-petal cherry blossom
+      const petalCount = 5;
+      g.fillStyle(color, Phaser.Math.FloatBetween(0.5, 0.85));
+      for (let p = 0; p < petalCount; p++) {
+        const angle = (p / petalCount) * Math.PI * 2 - Math.PI / 2;
+        const px = Math.cos(angle) * size * 0.5;
+        const py = Math.sin(angle) * size * 0.5;
+        g.fillEllipse(px, py, size * 0.7, size * 0.4);
+      }
+      // Center
+      g.fillStyle(0xffeecc, 0.8);
+      g.fillCircle(0, 0, size * 0.15);
+      g.setPosition(cx, cy);
+
+      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const speed = Phaser.Math.FloatBetween(40, 160);
+      const maxLife = Phaser.Math.FloatBetween(2.5, 5.0);
+      this.clickBlossoms.push({
+        g,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 40,
+        rotSpeed: Phaser.Math.FloatBetween(-0.05, 0.05),
+        life: maxLife, maxLife,
+      });
+    }
+  }
+
   update(time, delta) {
     const dt = delta / 1000;
     smoothWindX *= WIND_DECAY;
@@ -135,6 +172,18 @@ class YozakuraScene extends Phaser.Scene {
       if (p.g.x < -50 || p.g.x > W + 50) {
         p.g.x = Phaser.Math.Between(0, W); p.g.y = -10;
       }
+    });
+
+    // Update click-spawned blossoms
+    this.clickBlossoms = this.clickBlossoms.filter(b => {
+      b.life -= dt;
+      if (b.life <= 0) { b.g.destroy(); return false; }
+      b.g.x += (b.vx + smoothWindX * 35) * dt;
+      b.g.y += b.vy * dt;
+      b.vy += 25 * dt; // gentle gravity
+      b.g.rotation += b.rotSpeed;
+      b.g.alpha = Math.min(1, b.life / b.maxLife * 1.5);
+      return true;
     });
 
     // Draw piled petals

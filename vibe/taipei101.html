@@ -63,7 +63,20 @@ window.addEventListener('message', (e) => {
     parent.postMessage({ type: 'densityLabel', label: PATTERNS[patternIdx].label }, '*');
   }
   if (e.data.type === 'click') {
-    if (!moon.handleClick(e.data.x, e.data.y)) {
+    if (moon.handleClick(e.data.x, e.data.y)) return;
+    // Check if clicked on a building → light show
+    const gy = H * 0.88;
+    let hitBuilding = false;
+    buildings.forEach(b => {
+      if (e.data.x > b.x - b.w/2 && e.data.x < b.x + b.w/2 && e.data.y > gy - b.h && e.data.y < gy) {
+        hitBuilding = true;
+      }
+    });
+    // Check 101
+    if (e.data.x > bldg.x - 50 && e.data.x < bldg.x + 50 && e.data.y < gy) hitBuilding = true;
+    if (hitBuilding) {
+      lightShowTimer = 6; // 6 seconds of light show
+    } else {
       spawnClickFirework(e.data.x, e.data.y);
     }
   }
@@ -164,22 +177,107 @@ for (let i = 0; i < 30; i++) {
   });
 }
 
-function drawSkyline() {
+// ── Light show state ──
+let lightShowTimer = 0;
+const lightShowColors = ['#ff4488','#44ddff','#ffdd44','#44ff88','#aa44ff','#ff8844'];
+
+// ── Crowd ──
+const crowd = [];
+for (let i = 0; i < 60; i++) {
+  crowd.push({
+    baseX: rand(0, W),
+    y: H * 0.88 + rand(2, H * 0.10),
+    size: rand(3, 6),
+    color: `hsl(${rand(0,360)}, ${rand(30,70)}%, ${rand(30,60)}%)`,
+    headColor: `hsl(${rand(20,40)}, ${rand(40,60)}%, ${rand(55,75)}%)`,
+    swayPhase: rand(0, Math.PI * 2),
+    swaySpeed: rand(0.5, 1.5),
+    followStrength: rand(0.01, 0.04),
+    x: 0,
+  });
+}
+
+function drawSkyline(t, dt) {
   const groundY = H * 0.88;
-  buildings.forEach(b => {
+  const showActive = lightShowTimer > 0;
+  if (showActive) lightShowTimer -= dt;
+
+  buildings.forEach((b, bi) => {
     ctx.fillStyle = `rgba(10, 18, 30, 0.9)`;
     ctx.fillRect(b.x - b.w/2, groundY - b.h, b.w, b.h);
-    // Random window lights
-    ctx.fillStyle = `rgba(255, 220, 130, ${b.lit})`;
-    for (let wx = b.x - b.w/2 + 3; wx < b.x + b.w/2 - 3; wx += 6) {
-      for (let wy = groundY - b.h + 4; wy < groundY - 3; wy += 8) {
-        if (Math.random() > 0.5) ctx.fillRect(wx, wy, 3, 4);
+
+    if (showActive) {
+      // Light show: colorful windows cycling
+      const ci = Math.floor(t * 3 + bi * 0.7) % lightShowColors.length;
+      const showColor = lightShowColors[ci];
+      ctx.fillStyle = showColor;
+      ctx.globalAlpha = 0.6 + Math.sin(t * 5 + bi) * 0.3;
+      for (let wx = b.x - b.w/2 + 2; wx < b.x + b.w/2 - 2; wx += 5) {
+        for (let wy = groundY - b.h + 3; wy < groundY - 2; wy += 6) {
+          ctx.fillRect(wx, wy, 3, 4);
+        }
+      }
+      // Building edge glow
+      ctx.globalAlpha = 0.15;
+      ctx.fillRect(b.x - b.w/2 - 3, groundY - b.h, b.w + 6, b.h);
+      ctx.globalAlpha = 1;
+    } else {
+      // Normal window lights
+      ctx.fillStyle = `rgba(255, 220, 130, ${b.lit})`;
+      for (let wx = b.x - b.w/2 + 3; wx < b.x + b.w/2 - 3; wx += 6) {
+        for (let wy = groundY - b.h + 4; wy < groundY - 3; wy += 8) {
+          if (Math.random() > 0.5) ctx.fillRect(wx, wy, 3, 4);
+        }
       }
     }
   });
+
   // Ground
   ctx.fillStyle = '#0a0e18';
   ctx.fillRect(0, groundY, W, H - groundY);
+
+  // ── Crowd ──
+  crowd.forEach(c => {
+    // Follow mouse gently
+    c.swayPhase += c.swaySpeed * dt;
+    const targetX = c.baseX + (mouseX > 0 ? (mouseX - c.baseX) * c.followStrength * 8 : 0);
+    c.x += (targetX - c.x) * 0.02;
+    const sway = Math.sin(c.swayPhase) * 1.5;
+    const px = c.x + sway;
+    const s = c.size;
+
+    // Body
+    ctx.fillStyle = c.color;
+    ctx.fillRect(px - s * 0.4, c.y - s * 1.2, s * 0.8, s * 1.2);
+    // Head
+    ctx.fillStyle = c.headColor;
+    ctx.beginPath();
+    ctx.arc(px, c.y - s * 1.5, s * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Occasionally raise hand (cheer)
+    if (Math.sin(t * 2 + c.baseX) > 0.7) {
+      ctx.strokeStyle = c.headColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(px + s * 0.3, c.y - s * 0.8);
+      ctx.lineTo(px + s * 0.6, c.y - s * 2.2);
+      ctx.stroke();
+    }
+
+    // Glow stick / phone light
+    if (showActive || Math.sin(t * 1.5 + c.baseX * 0.1) > 0.5) {
+      const glowColor = lightShowColors[Math.floor(c.baseX * 0.1) % lightShowColors.length];
+      ctx.fillStyle = glowColor;
+      ctx.globalAlpha = 0.7 + Math.sin(t * 4 + c.baseX) * 0.3;
+      ctx.fillRect(px + s * 0.5, c.y - s * 2.3, 2, 2);
+      ctx.globalAlpha = 0.15;
+      ctx.beginPath();
+      ctx.arc(px + s * 0.5, c.y - s * 2.3, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  });
 }
 
 // ══════════════════════════════════
@@ -531,7 +629,7 @@ function animate() {
   drawDrones(elapsed, dt);
 
   // Skyline + 101
-  drawSkyline();
+  drawSkyline(elapsed, dt);
   drawBuilding(elapsed);
 
   // Auto fireworks from 101

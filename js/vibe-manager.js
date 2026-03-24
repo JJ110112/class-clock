@@ -15,6 +15,7 @@ const VIBES = [
   { name: '平溪天燈', file: 'vibe/sky-lantern.html', theme: 'dark',  accent: '#ff9944', accent2: '#ff6600', dim: '#a08060', border: '#3a2810', bg: '#0a0806', font: "'ZCOOL XiaoWei', serif" },
   { name: '雪梨煙火', file: 'vibe/sydney-fireworks.html', theme: 'dark', accent: '#ff4488', accent2: '#44ddff', dim: '#9090aa', border: '#1a1a30', bg: '#050515', font: "'Righteous', sans-serif" },
   { name: '珊瑚海洋', file: 'vibe/coral-reef.html', theme: 'dark', accent: '#ff7744', accent2: '#22ccaa', dim: '#6a90a0', border: '#0a2a3a', bg: '#031520', font: "'Fredoka', sans-serif" },
+  { name: '極光', file: 'vibe/aurora.html', theme: 'dark', accent: '#00ff88', accent2: '#44ffaa', dim: '#80a090', border: '#1a3028', bg: '#050810', font: "'Fredoka', sans-serif" },
 ];
 
 let currentVibeIndex = parseInt(localStorage.getItem('vibeIndex') || '0');
@@ -33,7 +34,7 @@ function applyVibeTheme(vibe) {
   const isLight = vibe.theme === 'light';
 
   document.body.classList.toggle('light-theme', isLight);
-  document.body.style.background = 'transparent';
+  document.body.style.background = vibe.bg;
 
   root.setProperty('--accent',  vibe.accent);
   root.setProperty('--accent2', vibe.accent2);
@@ -54,18 +55,41 @@ function applyVibeTheme(vibe) {
   }
 }
 
+let isTransitioning = false;
+
 function loadVibe(index) {
+  if (isTransitioning) return;
   currentVibeIndex = index;
   localStorage.setItem('vibeIndex', index);
   const vibe = VIBES[index];
-  applyVibeTheme(vibe);
-  vibeFrame.src = vibe.file;
-  // Show hint briefly
+
+  // Fade out
+  isTransitioning = true;
+  vibeFrame.style.opacity = '0';
+  // Set body bg to new vibe's color immediately (visible behind fading iframe)
+  document.body.style.background = vibe.bg;
+
+  setTimeout(() => {
+    applyVibeTheme(vibe);
+    vibeFrame.src = vibe.file;
+    // Fade in after iframe loads
+    vibeFrame.onload = () => {
+      vibeFrame.style.opacity = '1';
+      isTransitioning = false;
+      window.focus();
+    };
+    // Fallback if onload doesn't fire
+    setTimeout(() => {
+      vibeFrame.style.opacity = '1';
+      isTransitioning = false;
+    }, 1200);
+  }, 400); // wait for fade-out to complete
+
+  // Show hint
   vibeHint.textContent = vibe.name;
   vibeHint.classList.add('show');
   clearTimeout(hintTimer);
   hintTimer = setTimeout(() => vibeHint.classList.remove('show'), 2000);
-  window.focus();
   resetAutoSubScene();
 }
 

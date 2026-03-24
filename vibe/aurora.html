@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; }
+  body { overflow:hidden; background:#050810; cursor:default; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<script src="../js/celestial.js"></script>
+<canvas id="c"></canvas>
+<script>
+/* ═══════════════════════════════
+   極光 – Aurora Borealis
+   北極：極光、北極熊、馴鹿
+   ═══════════════════════════════ */
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W = canvas.width = window.innerWidth;
+let H = canvas.height = window.innerHeight;
+window.addEventListener('resize', () => { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; });
+
+let mouseX = -999, mouseY = -999;
+let smoothWindX = 0, smoothWindY = 0;
+const WIND_DECAY = 0.93, WIND_GAIN = 0.8;
+const WIND_RADIUS = 200;
+function windAt(x, y) { const dx=x-mouseX,dy=y-mouseY,d=Math.sqrt(dx*dx+dy*dy); return d<WIND_RADIUS?1-d/WIND_RADIUS:0; }
+function rand(a, b) { return a + Math.random() * (b - a); }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+const moon = new CelestialBody({ type: 'moon', radius: 16 });
+
+// ── Color palettes (sub-scenes) ──
+const PALETTES = [
+  { label: '🟢 綠色極光：氧氣', colors: ['#00ff88','#22ff66','#44ffaa','#00cc66'], sky: '#051008' },
+  { label: '🔴 紅色極光：高空氧氣', colors: ['#ff4444','#ff6644','#ff2266','#cc3333'], sky: '#100508' },
+  { label: '🔵 藍紫極光：氮氣', colors: ['#6644ff','#8866ff','#aa44ff','#4422cc'], sky: '#080510' },
+];
+let paletteIdx = 0;
+
+window.addEventListener('message', (e) => {
+  if (e.data.type === 'mousemove') {
+    mouseX = e.data.x; mouseY = e.data.y;
+    smoothWindX += e.data.windVX * e.data.windStrength * WIND_GAIN;
+    smoothWindY += e.data.windVY * e.data.windStrength * WIND_GAIN;
+  }
+  if (e.data.type === 'time') moon.setTime(e.data.hours, e.data.minutes);
+  if (e.data.type === 'density') {
+    paletteIdx = (paletteIdx + e.data.dir + PALETTES.length) % PALETTES.length;
+    parent.postMessage({ type: 'densityLabel', label: PALETTES[paletteIdx].label }, '*');
+  }
+  if (e.data.type === 'click') {
+    if (!moon.handleClick(e.data.x, e.data.y)) {
+      // Click: make bears run, reindeer startled
+      bears.forEach(b => { b.running = true; b.runTimer = 3 + Math.random() * 2; });
+      reindeer.forEach(r => { r.startled = true; r.startledTimer = 2 + Math.random() * 1.5; });
+    }
+  }
+});
+
+// ── Stars ──
+const stars = [];
+for (let i = 0; i < 120; i++) {
+  stars.push({ x: rand(0, W), y: rand(0, H * 0.55), r: rand(0.5, 2), phase: rand(0, Math.PI * 2), speed: rand(0.01, 0.04) });
+}
+
+// ── Aurora ribbons ──
+const RIBBON_COUNT = 5;
+const ribbons = [];
+for (let i = 0; i < RIBBON_COUNT; i++) {
+  ribbons.push({
+    yBase: H * (0.12 + i * 0.08),
+    amplitude: rand(20, 50),
+    frequency: rand(0.002, 0.005),
+    speed: rand(0.3, 0.8),
+    phase: rand(0, Math.PI * 2),
+    thickness: rand(25, 55),
+    alphaBase: rand(0.08, 0.18),
+  });
+}
+
+// ── Ground (snowy landscape) ──
+const groundY = H * 0.78;
+const mountains = [];
+for (let i = 0; i < 8; i++) {
+  mountains.push({ x: W * (i / 7), h: rand(60, 160), w: rand(100, 250) });
+}
+
+// ── Polar bears ──
+const bears = [];
+for (let i = 0; i < 2; i++) {
+  bears.push({
+    x: rand(W * 0.1, W * 0.9), y: groundY + rand(10, 40),
+    dir: Math.random() < 0.5 ? 1 : -1,
+    speed: rand(0.3, 0.6),
+    size: rand(0.8, 1.2),
+    walkPhase: rand(0, Math.PI * 2),
+    running: false, runTimer: 0,
+  });
+}
+
+// ── Reindeer ──
+const reindeer = [];
+for (let i = 0; i < 3; i++) {
+  reindeer.push({
+    x: rand(W * 0.05, W * 0.95), y: groundY + rand(5, 35),
+    dir: Math.random() < 0.5 ? 1 : -1,
+    speed: rand(0.2, 0.5),
+    size: rand(0.7, 1.0),
+    walkPhase: rand(0, Math.PI * 2),
+    grazing: Math.random() < 0.5,
+    grazeTimer: rand(2, 6),
+    startled: false, startledTimer: 0,
+  });
+}
+
+// ── Aurora particles ──
+let auroraParticles = [];
+
+function spawnAuroraParticle(x, y) {
+  const pal = PALETTES[paletteIdx].colors;
+  auroraParticles.push({
+    x, y: y || rand(H * 0.08, H * 0.5),
+    vx: rand(-1, 1), vy: rand(-2, -0.5),
+    life: rand(1, 3), maxLife: rand(1, 3),
+    size: rand(2, 6),
+    color: pal[Math.floor(Math.random() * pal.length)],
+  });
+}
+
+// ══════════════════════════════════
+//  Draw functions
+// ══════════════════════════════════
+
+function drawSky(t) {
+  const sky = PALETTES[paletteIdx].sky;
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, sky);
+  grad.addColorStop(0.6, '#0a0c18');
+  grad.addColorStop(1, '#101520');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawStars(t) {
+  stars.forEach(s => {
+    s.phase += s.speed;
+    const alpha = (Math.sin(s.phase) + 1) / 2 * 0.7 + 0.2;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+function drawAurora(t) {
+  const pal = PALETTES[paletteIdx].colors;
+  ctx.globalCompositeOperation = 'lighter';
+
+  ribbons.forEach((r, ri) => {
+    r.phase += r.speed * 0.016;
+    const color = pal[ri % pal.length];
+
+    for (let x = 0; x < W; x += 4) {
+      const wave1 = Math.sin(x * r.frequency + r.phase + t * 0.5) * r.amplitude;
+      const wave2 = Math.sin(x * r.frequency * 1.5 + r.phase * 0.7 + t * 0.3) * r.amplitude * 0.5;
+      const mouseInf = windAt(x, r.yBase + wave1) * smoothWindX * 15;
+      const y = r.yBase + wave1 + wave2 + mouseInf;
+      const pulse = (Math.sin(t * 0.8 + ri + x * 0.003) + 1) / 2;
+
+      ctx.globalAlpha = r.alphaBase * (0.5 + pulse * 0.5);
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, 5, r.thickness * (0.6 + pulse * 0.4));
+    }
+  });
+
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+}
+
+function drawGround() {
+  // Snow ground
+  const grad = ctx.createLinearGradient(0, groundY - 20, 0, H);
+  grad.addColorStop(0, '#2a3040');
+  grad.addColorStop(0.15, '#c8d0e0');
+  grad.addColorStop(0.4, '#e0e8f0');
+  grad.addColorStop(1, '#d8e0ea');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  ctx.lineTo(0, groundY);
+  // Gentle hills
+  for (let x = 0; x <= W; x += 60) {
+    const hill = Math.sin(x * 0.008) * 15 + Math.sin(x * 0.003) * 25;
+    ctx.lineTo(x, groundY + hill);
+  }
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // Mountain silhouettes
+  ctx.fillStyle = '#1a2030';
+  mountains.forEach(m => {
+    ctx.beginPath();
+    ctx.moveTo(m.x - m.w, groundY);
+    ctx.lineTo(m.x, groundY - m.h);
+    ctx.lineTo(m.x + m.w, groundY);
+    ctx.closePath();
+    ctx.fill();
+  });
+  // Snow caps
+  ctx.fillStyle = '#c0c8d8';
+  mountains.forEach(m => {
+    ctx.beginPath();
+    ctx.moveTo(m.x - m.w * 0.3, groundY - m.h * 0.6);
+    ctx.lineTo(m.x, groundY - m.h);
+    ctx.lineTo(m.x + m.w * 0.3, groundY - m.h * 0.6);
+    ctx.closePath();
+    ctx.fill();
+  });
+}
+
+function drawBear(b, t) {
+  const s = b.size * 12;
+  const x = b.x, y = b.y;
+  const legSwing = Math.sin(b.walkPhase) * 4;
+
+  ctx.save();
+  ctx.translate(x, y);
+  if (b.dir < 0) ctx.scale(-1, 1);
+
+  // Body
+  ctx.fillStyle = '#e8e0d8';
+  ctx.beginPath();
+  ctx.ellipse(0, -s * 0.6, s * 1.4, s * 0.9, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Head
+  ctx.beginPath();
+  ctx.ellipse(s * 1.2, -s * 1.1, s * 0.65, s * 0.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Ears
+  ctx.beginPath();
+  ctx.arc(s * 0.85, -s * 1.6, s * 0.2, 0, Math.PI * 2);
+  ctx.arc(s * 1.5, -s * 1.6, s * 0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Snout
+  ctx.fillStyle = '#d0c8c0';
+  ctx.beginPath();
+  ctx.ellipse(s * 1.6, -s * 0.95, s * 0.3, s * 0.25, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Nose
+  ctx.fillStyle = '#333';
+  ctx.beginPath();
+  ctx.arc(s * 1.75, -s * 0.95, s * 0.08, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Eyes
+  ctx.beginPath();
+  ctx.arc(s * 1.1, -s * 1.2, s * 0.06, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Legs
+  ctx.fillStyle = '#e8e0d8';
+  const legs = [[-s * 0.8, 0], [-s * 0.3, 0], [s * 0.3, 0], [s * 0.8, 0]];
+  legs.forEach((l, i) => {
+    const swing = (i % 2 === 0 ? legSwing : -legSwing);
+    ctx.beginPath();
+    ctx.ellipse(l[0], swing, s * 0.22, s * 0.45, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  ctx.restore();
+}
+
+function drawReindeer(r, t) {
+  const s = r.size * 10;
+  const x = r.x, y = r.y;
+  const legSwing = Math.sin(r.walkPhase) * 3;
+  const headDip = r.grazing ? Math.sin(t * 2) * 3 + 5 : 0;
+
+  ctx.save();
+  ctx.translate(x, y);
+  if (r.dir < 0) ctx.scale(-1, 1);
+
+  // Body
+  ctx.fillStyle = '#8B6914';
+  ctx.beginPath();
+  ctx.ellipse(0, -s * 0.8, s * 1.2, s * 0.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Neck
+  ctx.beginPath();
+  ctx.moveTo(s * 0.8, -s * 1.2);
+  ctx.lineTo(s * 1.1, -s * 1.8 + headDip);
+  ctx.lineTo(s * 1.3, -s * 1.2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Head
+  ctx.beginPath();
+  ctx.ellipse(s * 1.1, -s * 1.9 + headDip, s * 0.4, s * 0.3, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Antlers
+  ctx.strokeStyle = '#5a4010';
+  ctx.lineWidth = s * 0.08;
+  ctx.lineCap = 'round';
+  // Left antler
+  ctx.beginPath();
+  ctx.moveTo(s * 0.9, -s * 2.1 + headDip);
+  ctx.lineTo(s * 0.6, -s * 2.7 + headDip);
+  ctx.moveTo(s * 0.75, -s * 2.4 + headDip);
+  ctx.lineTo(s * 0.45, -s * 2.3 + headDip);
+  ctx.stroke();
+  // Right antler
+  ctx.beginPath();
+  ctx.moveTo(s * 1.3, -s * 2.1 + headDip);
+  ctx.lineTo(s * 1.6, -s * 2.7 + headDip);
+  ctx.moveTo(s * 1.45, -s * 2.4 + headDip);
+  ctx.lineTo(s * 1.7, -s * 2.3 + headDip);
+  ctx.stroke();
+
+  // Nose
+  ctx.fillStyle = '#cc3333';
+  ctx.beginPath();
+  ctx.arc(s * 1.4, -s * 1.85 + headDip, s * 0.08, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Eye
+  ctx.fillStyle = '#222';
+  ctx.beginPath();
+  ctx.arc(s * 1.15, -s * 2.0 + headDip, s * 0.05, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Legs
+  ctx.fillStyle = '#6B5010';
+  const legs = [[-s * 0.6, 0], [-s * 0.2, 0], [s * 0.2, 0], [s * 0.6, 0]];
+  legs.forEach((l, i) => {
+    const swing = (i % 2 === 0 ? legSwing : -legSwing);
+    ctx.beginPath();
+    ctx.ellipse(l[0], swing, s * 0.1, s * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Tail
+  ctx.fillStyle = '#f0e8d8';
+  ctx.beginPath();
+  ctx.ellipse(-s * 1.15, -s * 0.9, s * 0.15, s * 0.12, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawAuroraParticles(dt) {
+  auroraParticles = auroraParticles.filter(p => {
+    p.life -= dt;
+    if (p.life <= 0) return false;
+    p.x += p.vx + smoothWindX * windAt(p.x, p.y) * 3 * dt;
+    p.y += p.vy;
+    const alpha = (p.life / p.maxLife) * 0.6;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    return true;
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ══════════════════════════════════
+//  Update & Animate
+// ══════════════════════════════════
+let lastTime = performance.now();
+let elapsed = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
+  elapsed += dt;
+
+  smoothWindX *= WIND_DECAY;
+  smoothWindY *= WIND_DECAY;
+
+  // Spawn aurora particles near mouse
+  if (mouseX > 0 && mouseY < H * 0.6 && Math.random() < 0.3) {
+    spawnAuroraParticle(mouseX + rand(-30, 30), mouseY + rand(-20, 20));
+  }
+
+  // Update bears
+  bears.forEach(b => {
+    // Mouse avoidance
+    const dx = b.x - mouseX, dy = b.y - mouseY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 150 && dist > 0) {
+      b.dir = dx > 0 ? 1 : -1;
+      b.x += (dx / dist) * 1.5;
+    }
+
+    if (b.running) {
+      b.runTimer -= dt;
+      b.walkPhase += 0.25;
+      b.x += b.dir * b.speed * 5;
+      if (b.runTimer <= 0) b.running = false;
+    } else {
+      b.walkPhase += 0.04;
+      b.x += b.dir * b.speed * 0.3;
+    }
+
+    // Wrap
+    if (b.x > W + 80) { b.x = -80; b.dir = 1; }
+    if (b.x < -80) { b.x = W + 80; b.dir = -1; }
+  });
+
+  // Update reindeer
+  reindeer.forEach(r => {
+    // Mouse attraction (reindeer approach cursor)
+    const dx = mouseX - r.x, dy = mouseY - r.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (mouseX > 0 && dist > 30 && dist < 300 && !r.startled) {
+      r.dir = dx > 0 ? 1 : -1;
+      r.x += (dx / dist) * 0.6;
+      r.grazing = false;
+      r.walkPhase += 0.06;
+    } else if (dist <= 30 && !r.startled) {
+      r.grazing = true; // graze near mouse
+    }
+
+    if (r.startled) {
+      r.startledTimer -= dt;
+      r.walkPhase += 0.2;
+      r.x += r.dir * r.speed * 4;
+      r.grazing = false;
+      if (r.startledTimer <= 0) { r.startled = false; r.grazing = true; r.grazeTimer = rand(3, 8); }
+    } else {
+      r.grazeTimer -= dt;
+      if (r.grazeTimer <= 0) {
+        r.grazing = !r.grazing;
+        r.grazeTimer = r.grazing ? rand(3, 8) : rand(2, 5);
+        if (!r.grazing) r.dir = Math.random() < 0.5 ? 1 : -1;
+      }
+
+      if (!r.grazing) {
+        r.walkPhase += 0.05;
+        r.x += r.dir * r.speed * 0.4;
+      }
+    }
+
+    if (r.x > W + 60) { r.x = -60; r.dir = 1; }
+    if (r.x < -60) { r.x = W + 60; r.dir = -1; }
+  });
+
+  // ── Draw ──
+  drawSky(elapsed);
+  drawStars(elapsed);
+  moon.update(dt);
+  drawAurora(elapsed);
+  drawAuroraParticles(dt);
+  drawGround();
+
+  // Draw animals (sorted by Y for depth)
+  const animals = [
+    ...bears.map(b => ({ type: 'bear', obj: b, y: b.y })),
+    ...reindeer.map(r => ({ type: 'reindeer', obj: r, y: r.y })),
+  ].sort((a, b) => a.y - b.y);
+
+  animals.forEach(a => {
+    if (a.type === 'bear') drawBear(a.obj, elapsed);
+    else drawReindeer(a.obj, elapsed);
+  });
+}
+
+animate();
+</script>
+</body></html>

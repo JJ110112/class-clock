@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; }
+  body { overflow:hidden; background:#020818; cursor:default; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<script src="../js/celestial.js"></script>
+<canvas id="c"></canvas>
+<script>
+/* ═══════════════════════════════
+   台北101跨年 – Taipei 101 NYE
+   無人機排列 + 煙火
+   ═══════════════════════════════ */
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W = canvas.width = window.innerWidth;
+let H = canvas.height = window.innerHeight;
+window.addEventListener('resize', () => { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; });
+
+let mouseX = -999, mouseY = -999;
+let smoothWindX = 0, smoothWindY = 0;
+const WIND_DECAY = 0.92, WIND_GAIN = 0.6;
+const WIND_RADIUS = 200;
+function windAt(x, y) { const dx=x-mouseX,dy=y-mouseY,d=Math.sqrt(dx*dx+dy*dy); return d<WIND_RADIUS?1-d/WIND_RADIUS:0; }
+function rand(a, b) { return a + Math.random() * (b - a); }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+const moon = new CelestialBody({ type: 'moon', radius: 14 });
+
+// ══════════════════════════════════
+//  Drone show patterns (sub-scenes)
+// ══════════════════════════════════
+const PATTERNS = [
+  { label: 'TAIWAN', type: 'text', text: 'T A I W A N', color: '#ffffff', cols: 60, rows: 18,
+    area: { x: W*0.01, y: H*0.12, w: W*0.45, h: H*0.28 } },
+  { label: 'ROC 國旗', type: 'flag', cols: 40, rows: 28,
+    area: { x: W*0.02, y: H*0.12, w: W*0.38, h: H*0.52 } },
+  { label: '我愛台灣', type: 'text', text: '♥ 台 灣', color: '#ff4466', cols: 36, rows: 14,
+    area: { x: W*0.05, y: H*0.16, w: W*0.35, h: H*0.22 } },
+  { label: 'Love & Peace', type: 'dualText', text1: 'L O V E', text2: 'P E A C E', color: '#ffdd44', cols: 36, rows: 12,
+    area1: { x: W*0.08, y: H*0.16, w: W*0.30, h: H*0.18 },
+    area2: { x: W*0.58, y: H*0.12, w: W*0.38, h: H*0.25 } },
+  { label: '台灣形狀', type: 'taiwan', cols: 24, rows: 28,
+    area: { x: W*0.02, y: H*0.20, w: W*0.26, h: H*0.46 } },
+];
+let patternIdx = 0;
+
+window.addEventListener('message', (e) => {
+  if (e.data.type === 'mousemove') {
+    mouseX = e.data.x; mouseY = e.data.y;
+    smoothWindX += e.data.windVX * e.data.windStrength * WIND_GAIN;
+    smoothWindY += e.data.windVY * e.data.windStrength * WIND_GAIN;
+  }
+  if (e.data.type === 'time') moon.setTime(e.data.hours, e.data.minutes);
+  if (e.data.type === 'density') {
+    patternIdx = (patternIdx + e.data.dir + PATTERNS.length) % PATTERNS.length;
+    buildDroneTarget();
+    parent.postMessage({ type: 'densityLabel', label: PATTERNS[patternIdx].label }, '*');
+  }
+  if (e.data.type === 'click') {
+    if (!moon.handleClick(e.data.x, e.data.y)) {
+      spawnClickFirework(e.data.x, e.data.y);
+    }
+  }
+});
+
+// ══════════════════════════════════
+//  Stars
+// ══════════════════════════════════
+const stars = [];
+for (let i = 0; i < 80; i++) {
+  stars.push({ x: rand(0, W), y: rand(0, H * 0.5), r: rand(0.5, 1.5), phase: rand(0, Math.PI*2), speed: rand(0.01, 0.03) });
+}
+
+// ══════════════════════════════════
+//  Taipei 101 building
+// ══════════════════════════════════
+const bldg = {
+  x: W * 0.78,   // right side
+  baseY: H * 0.88,
+  width: 40,
+  sections: 8,    // stepped sections
+  sectionH: 28,
+  spireH: 60,
+};
+
+function drawBuilding(t) {
+  const { x, baseY, width, sections, sectionH, spireH } = bldg;
+  let y = baseY;
+
+  // Base wider section
+  ctx.fillStyle = '#1a2a40';
+  ctx.fillRect(x - width * 0.8, y - 20, width * 1.6, 20);
+
+  // Stepped sections
+  for (let i = 0; i < sections; i++) {
+    const w = width * (1 - i * 0.06);
+    const h = sectionH;
+    y -= h;
+
+    // Section body
+    const grad = ctx.createLinearGradient(x - w, y, x + w, y);
+    grad.addColorStop(0, '#0a1828');
+    grad.addColorStop(0.3, '#1a3050');
+    grad.addColorStop(0.7, '#1a3050');
+    grad.addColorStop(1, '#0a1828');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x - w, y, w * 2, h);
+
+    // Horizontal accent lights
+    const pulse = (Math.sin(t * 2 + i * 0.8) + 1) / 2;
+    ctx.fillStyle = `rgba(0, 200, 255, ${0.15 + pulse * 0.15})`;
+    ctx.fillRect(x - w + 2, y + h - 3, w * 2 - 4, 2);
+
+    // Window lights
+    ctx.fillStyle = `rgba(255, 230, 150, ${0.1 + pulse * 0.08})`;
+    for (let wx = x - w + 4; wx < x + w - 4; wx += 6) {
+      for (let wy = y + 4; wy < y + h - 5; wy += 7) {
+        if (Math.random() > 0.3) ctx.fillRect(wx, wy, 3, 4);
+      }
+    }
+
+    // Taper inward indicator
+    if (i < sections - 1) {
+      ctx.fillStyle = '#0d1d30';
+      ctx.fillRect(x - w, y - 3, w * 2, 3);
+    }
+  }
+
+  // Spire
+  const spireBase = y;
+  ctx.strokeStyle = '#3388aa';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x, spireBase);
+  ctx.lineTo(x, spireBase - spireH);
+  ctx.stroke();
+
+  // Spire tip glow
+  const tipPulse = (Math.sin(t * 3) + 1) / 2;
+  ctx.fillStyle = `rgba(255, 50, 50, ${0.5 + tipPulse * 0.5})`;
+  ctx.beginPath();
+  ctx.arc(x, spireBase - spireH, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = `rgba(255, 100, 100, ${0.15 + tipPulse * 0.1})`;
+  ctx.beginPath();
+  ctx.arc(x, spireBase - spireH, 12, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// ══════════════════════════════════
+//  City skyline
+// ══════════════════════════════════
+const buildings = [];
+for (let i = 0; i < 30; i++) {
+  buildings.push({
+    x: rand(0, W), w: rand(15, 45), h: rand(20, 80),
+    lit: rand(0.1, 0.4),
+  });
+}
+
+function drawSkyline() {
+  const groundY = H * 0.88;
+  buildings.forEach(b => {
+    ctx.fillStyle = `rgba(10, 18, 30, 0.9)`;
+    ctx.fillRect(b.x - b.w/2, groundY - b.h, b.w, b.h);
+    // Random window lights
+    ctx.fillStyle = `rgba(255, 220, 130, ${b.lit})`;
+    for (let wx = b.x - b.w/2 + 3; wx < b.x + b.w/2 - 3; wx += 6) {
+      for (let wy = groundY - b.h + 4; wy < groundY - 3; wy += 8) {
+        if (Math.random() > 0.5) ctx.fillRect(wx, wy, 3, 4);
+      }
+    }
+  });
+  // Ground
+  ctx.fillStyle = '#0a0e18';
+  ctx.fillRect(0, groundY, W, H - groundY);
+}
+
+// ══════════════════════════════════
+//  Drone show (pixel grid)
+// ══════════════════════════════════
+const DRONE_COLS = 40;
+const DRONE_ROWS = 28;
+const DRONE_TOTAL = DRONE_COLS * DRONE_ROWS;
+
+let drones = [];
+
+// Init drones scattered
+for (let i = 0; i < DRONE_TOTAL; i++) {
+  drones.push({
+    x: rand(0, W), y: rand(H * 0.05, H * 0.7),
+    tx: 0, ty: 0, color: '#000', active: false,
+    phase: rand(0, Math.PI * 2),
+  });
+}
+
+// Helper: render text to bitmap
+function textToBitmap(text, cols, rows) {
+  // Render at higher resolution then downsample for clean text
+  const scale = 8;
+  const hw = cols * scale, hh = rows * scale;
+  const offCanvas = document.createElement('canvas');
+  offCanvas.width = hw; offCanvas.height = hh;
+  const oc = offCanvas.getContext('2d');
+  oc.fillStyle = '#000';
+  oc.fillRect(0, 0, hw, hh);
+  oc.fillStyle = '#fff';
+  oc.textAlign = 'center'; oc.textBaseline = 'middle';
+
+  const lines = text.split('\n');
+  const maxLen = Math.max(...lines.map(l => l.length));
+  const fontSize = Math.min(Math.floor(hh / lines.length * 0.8), Math.floor(hw / maxLen * 1.7));
+  oc.font = `bold ${fontSize}px sans-serif`;
+  lines.forEach((line, i) => {
+    const ly = (hh / (lines.length + 1)) * (i + 1);
+    oc.fillText(line, hw / 2, ly);
+  });
+
+  // Downsample to target resolution
+  const downCanvas = document.createElement('canvas');
+  downCanvas.width = cols; downCanvas.height = rows;
+  const dc = downCanvas.getContext('2d');
+  dc.drawImage(offCanvas, 0, 0, cols, rows);
+  return dc.getImageData(0, 0, cols, rows).data;
+}
+
+// Helper: Taiwan shape bitmap (番薯 sweet potato shape)
+function taiwanBitmap(cols, rows) {
+  const offCanvas = document.createElement('canvas');
+  offCanvas.width = cols; offCanvas.height = rows;
+  const oc = offCanvas.getContext('2d');
+  oc.fillStyle = '#000'; oc.fillRect(0, 0, cols, rows);
+
+  oc.fillStyle = '#fff';
+  oc.beginPath();
+  // Taiwan: narrow top (north), fat middle, tapered south tip
+  // Oriented vertically, slightly tilted NE-SW like real Taiwan
+  const cx = cols * 0.48, cy = rows * 0.48;
+  const sw = cols * 0.35, sh = rows * 0.45;
+  // Detailed outline: north tip → east coast → south tip → west coast
+  const pts = [
+    // North tip (基隆, narrow)
+    [0.52, 0.04], [0.56, 0.06],
+    // NE coast (東北角, widening)
+    [0.62, 0.12], [0.66, 0.20],
+    // East coast (花蓮台東, widest part, slight bulge)
+    [0.68, 0.30], [0.67, 0.40], [0.64, 0.50],
+    // SE (台東, curving in)
+    [0.60, 0.60], [0.56, 0.68],
+    // South tip (墾丁, tapers to point)
+    [0.53, 0.76], [0.50, 0.84], [0.48, 0.92], [0.47, 0.97],
+    // SW coast (回來, west side)
+    [0.44, 0.90], [0.42, 0.80],
+    // West coast (台南高雄嘉義, wider belly)
+    [0.38, 0.68], [0.34, 0.56], [0.32, 0.44],
+    // NW (桃園新竹, moderate width)
+    [0.33, 0.32], [0.36, 0.22], [0.40, 0.14],
+    // Back to north
+    [0.45, 0.08], [0.50, 0.04],
+  ];
+  const first = pts[0];
+  oc.moveTo(cx + (first[0] - 0.5) * sw * 2, cy + (first[1] - 0.5) * sh * 2);
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i];
+    const nx = cx + (p[0] - 0.5) * sw * 2;
+    const ny = cy + (p[1] - 0.5) * sh * 2;
+    // Use quadratic curve for smooth shape
+    const pp = pts[i - 1];
+    const px = cx + (pp[0] - 0.5) * sw * 2;
+    const py = cy + (pp[1] - 0.5) * sh * 2;
+    const cpx = (px + nx) / 2 + (Math.random() - 0.5) * 0.5;
+    const cpy = (py + ny) / 2 + (Math.random() - 0.5) * 0.5;
+    oc.quadraticCurveTo(px, py, nx, ny);
+  }
+  oc.closePath(); oc.fill();
+  return oc.getImageData(0, 0, cols, rows).data;
+}
+
+// Helper: ROC flag bitmap
+function flagBitmap(cols, rows) {
+  const offCanvas = document.createElement('canvas');
+  offCanvas.width = cols; offCanvas.height = rows;
+  const oc = offCanvas.getContext('2d');
+
+  // Red background
+  oc.fillStyle = '#ff0000'; oc.fillRect(0, 0, cols, rows);
+  // Blue canton (top-left quarter)
+  const cw = cols * 0.5, ch = rows * 0.5;
+  oc.fillStyle = '#0000aa'; oc.fillRect(0, 0, cw, ch);
+  // White sun in canton
+  const scx = cw / 2, scy = ch / 2, sr = Math.min(cw, ch) * 0.3;
+  oc.fillStyle = '#ffffff';
+  oc.beginPath(); oc.arc(scx, scy, sr, 0, Math.PI * 2); oc.fill();
+  // Sun rays (12 triangles)
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+    const a1 = a - 0.15, a2 = a + 0.15;
+    const rr = sr * 1.8;
+    oc.beginPath();
+    oc.moveTo(scx + Math.cos(a) * sr * 0.5, scy + Math.sin(a) * sr * 0.5);
+    oc.lineTo(scx + Math.cos(a1) * rr, scy + Math.sin(a1) * rr);
+    oc.lineTo(scx + Math.cos(a2) * rr, scy + Math.sin(a2) * rr);
+    oc.closePath(); oc.fill();
+  }
+  // Blue circle center
+  oc.fillStyle = '#0000aa';
+  oc.beginPath(); oc.arc(scx, scy, sr * 0.35, 0, Math.PI * 2); oc.fill();
+
+  // Return RGB data (we'll sample colors)
+  return oc.getImageData(0, 0, cols, rows).data;
+}
+
+function assignBitmapToDrones(bitmap, cols, rows, area, color, colorFromBitmap, startIdx) {
+  let assigned = startIdx || 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (assigned >= DRONE_TOTAL) break;
+      const pi = (r * cols + c) * 4;
+      const bright = (bitmap[pi] + bitmap[pi+1] + bitmap[pi+2]) / 3;
+      const tx = area.x + (c / cols) * area.w;
+      const ty = area.y + (r / rows) * area.h;
+
+      if (bright > 30) {
+        const dc = colorFromBitmap
+          ? `rgb(${bitmap[pi]},${bitmap[pi+1]},${bitmap[pi+2]})`
+          : color;
+        drones[assigned].tx = tx;
+        drones[assigned].ty = ty;
+        drones[assigned].color = dc;
+        drones[assigned].active = true;
+        assigned++;
+      }
+    }
+  }
+  return assigned;
+}
+
+function buildDroneTarget() {
+  const p = PATTERNS[patternIdx];
+
+  // Reset all drones to inactive
+  drones.forEach(d => {
+    d.active = false;
+    d.tx = rand(W * 0.05, W * 0.6);
+    d.ty = rand(H * 0.05, H * 0.65);
+    d.color = '#000';
+  });
+
+  const pc = p.cols || DRONE_COLS;
+  const pr = p.rows || DRONE_ROWS;
+
+  if (p.type === 'dualText') {
+    const bm1 = textToBitmap(p.text1, pc, pr);
+    const bm2 = textToBitmap(p.text2, pc, pr);
+    const n = assignBitmapToDrones(bm1, pc, pr, p.area1, p.color, false, 0);
+    assignBitmapToDrones(bm2, pc, pr, p.area2, p.color, false, n);
+  } else {
+    let bitmap, colorFromBitmap = false, color = p.color || '#44ddff';
+    if (p.type === 'text') {
+      bitmap = textToBitmap(p.text, pc, pr);
+    } else if (p.type === 'flag') {
+      bitmap = flagBitmap(pc, pr);
+      colorFromBitmap = true;
+    } else if (p.type === 'taiwan') {
+      bitmap = taiwanBitmap(pc, pr);
+      color = '#22dd66';
+    }
+    assignBitmapToDrones(bitmap, pc, pr, p.area, color, colorFromBitmap, 0);
+  }
+}
+
+// Slow floating drift for entire formation
+let driftX = 0, driftY = 0;
+let driftPhaseX = rand(0, Math.PI * 2), driftPhaseY = rand(0, Math.PI * 2);
+
+function drawDrones(t, dt) {
+  // Gentle floating motion (entire formation drifts together)
+  driftPhaseX += dt * 0.3;
+  driftPhaseY += dt * 0.2;
+  driftX = Math.sin(driftPhaseX) * W * 0.02;
+  driftY = Math.sin(driftPhaseY) * H * 0.015;
+
+  drones.forEach(d => {
+    // Smooth movement toward target + drift offset
+    d.x += (d.tx + driftX - d.x) * 0.03;
+    d.y += (d.ty + driftY - d.y) * 0.03;
+
+    // Wind influence
+    const w = windAt(d.x, d.y);
+    d.x += smoothWindX * 3 * dt * w;
+    d.y += smoothWindY * 2 * dt * w;
+
+    if (!d.active) return;
+
+    d.phase += 0.03;
+    const flicker = 0.75 + Math.sin(d.phase) * 0.25;
+
+    // Glow
+    ctx.globalAlpha = flicker * 0.15;
+    ctx.fillStyle = d.color;
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Core
+    ctx.globalAlpha = flicker * 0.85;
+    ctx.fillStyle = d.color;
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, 2, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+// Init first pattern
+buildDroneTarget();
+
+// ══════════════════════════════════
+//  101 Fireworks (from building)
+// ══════════════════════════════════
+let fireworks = [];
+let nextAutoFW = 1000;
+const FW_COLORS = [
+  ['#ff4466','#ff6688','#ffaacc'],
+  ['#44ddff','#66eeff','#aaf0ff'],
+  ['#ffdd44','#ffee66','#fff0aa'],
+  ['#44ff88','#66ffaa','#aaffcc'],
+  ['#ff8844','#ffaa66','#ffccaa'],
+  ['#dd44ff','#ee66ff','#f0aaff'],
+];
+
+function spawnFirework(x, y) {
+  const colors = FW_COLORS[Math.floor(Math.random() * FW_COLORS.length)];
+  const count = 40 + Math.floor(Math.random() * 40);
+  const particles = [];
+  for (let i = 0; i < count; i++) {
+    const angle = rand(0, Math.PI * 2);
+    const speed = rand(1, 6);
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 1,
+      life: rand(0.8, 2.5),
+      maxLife: rand(0.8, 2.5),
+      color: colors[Math.floor(Math.random() * colors.length)],
+      size: rand(1, 3),
+    });
+  }
+  fireworks.push({ particles, age: 0 });
+}
+
+function spawnClickFirework(cx, cy) {
+  for (let i = 0; i < 2; i++) {
+    spawnFirework(cx + rand(-20, 20), cy + rand(-15, 15));
+  }
+}
+
+function drawFireworks(dt) {
+  ctx.globalCompositeOperation = 'lighter';
+  fireworks = fireworks.filter(fw => {
+    fw.age += dt;
+    let alive = false;
+    fw.particles = fw.particles.filter(p => {
+      p.life -= dt;
+      if (p.life <= 0) return false;
+      alive = true;
+      p.vy += 0.8 * dt; // gravity
+      p.vx += smoothWindX * 0.003 * windAt(p.x, p.y);
+      p.x += p.vx;
+      p.y += p.vy;
+      const alpha = clamp(p.life / p.maxLife, 0, 1);
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      // Trail
+      ctx.globalAlpha = alpha * 0.3;
+      ctx.beginPath();
+      ctx.arc(p.x - p.vx * 0.5, p.y - p.vy * 0.5, p.size * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    });
+    return alive;
+  });
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+}
+
+// ══════════════════════════════════
+//  Animate
+// ══════════════════════════════════
+let lastTime = performance.now();
+let elapsed = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
+  elapsed += dt;
+
+  smoothWindX *= WIND_DECAY;
+  smoothWindY *= WIND_DECAY;
+
+  // Sky
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#020818');
+  grad.addColorStop(0.6, '#0a1228');
+  grad.addColorStop(1, '#0a0e18');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars
+  stars.forEach(s => {
+    s.phase += s.speed;
+    ctx.globalAlpha = (Math.sin(s.phase) + 1) / 2 * 0.6 + 0.2;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+
+  moon.update(dt);
+
+  // Drone show
+  drawDrones(elapsed, dt);
+
+  // Skyline + 101
+  drawSkyline();
+  drawBuilding(elapsed);
+
+  // Auto fireworks from 101
+  nextAutoFW -= dt * 1000;
+  if (nextAutoFW <= 0) {
+    nextAutoFW = rand(300, 1000);
+    const bx = bldg.x + rand(-30, 30);
+    const by = bldg.baseY - bldg.sections * bldg.sectionH - bldg.spireH + rand(-20, 40);
+    spawnFirework(bx, by);
+  }
+
+  drawFireworks(dt);
+}
+
+animate();
+</script>
+</body></html>

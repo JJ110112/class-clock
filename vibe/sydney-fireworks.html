@@ -432,14 +432,48 @@ class SydneyScene extends Phaser.Scene {
     });
 
     // Auto fireworks
-    if (!this.nextAutoFW) this.nextAutoFW = Phaser.Math.Between(1500, 4000);
-    this.nextAutoFW -= delta;
-    if (this.nextAutoFW <= 0) {
-      this.nextAutoFW = Phaser.Math.Between(2000, 5000);
-      const fx = Phaser.Math.Between(W * 0.1, W * 0.9);
-      const fy = Phaser.Math.Between(H * 0.05, H * 0.35);
-      const colors = Phaser.Utils.Array.GetRandom(FW_COLORS);
-      this.explode(fx, fy, colors);
+    // Auto fireworks: multiple positions, same color repeated per position
+    if (!this.autoFWState) this.autoFWState = { phase: 'wait', timer: 500 };
+    const afw = this.autoFWState;
+    afw.timer -= delta;
+
+    if (afw.phase === 'wait' && afw.timer <= 0) {
+      // Pick 2-4 launch positions + 1 shared color palette
+      afw.colors = Phaser.Utils.Array.GetRandom(FW_COLORS);
+      afw.positions = [];
+      const posCount = Phaser.Math.Between(2, 4);
+      for (let i = 0; i < posCount; i++) {
+        afw.positions.push({
+          x: Phaser.Math.Between(W * 0.05, W * 0.95),
+          y: Phaser.Math.Between(H * 0.03, H * 0.4),
+          shots: Phaser.Math.Between(3, 6), // repeat same spot
+          shotIdx: 0,
+        });
+      }
+      afw.phase = 'firing';
+      afw.shotTimer = 0;
+    }
+
+    if (afw.phase === 'firing') {
+      afw.shotTimer -= delta;
+      if (afw.shotTimer <= 0) {
+        afw.shotTimer = Phaser.Math.Between(250, 500);
+        let allDone = true;
+        afw.positions.forEach(p => {
+          if (p.shotIdx < p.shots) {
+            // Same position, slight jitter
+            const jx = p.x + Phaser.Math.Between(-15, 15);
+            const jy = p.y + Phaser.Math.Between(-10, 10);
+            this.explode(jx, jy, afw.colors);
+            p.shotIdx++;
+            allDone = false;
+          }
+        });
+        if (allDone) {
+          afw.phase = 'wait';
+          afw.timer = Phaser.Math.Between(800, 2000); // pause before next wave
+        }
+      }
     }
 
     // Bridge lights

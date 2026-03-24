@@ -16,6 +16,7 @@ const VIBES = [
   { name: '雪梨煙火', file: 'vibe/sydney-fireworks.html', theme: 'dark', accent: '#ff4488', accent2: '#44ddff', dim: '#9090aa', border: '#1a1a30', bg: '#050515', font: "'Righteous', sans-serif" },
   { name: '珊瑚海洋', file: 'vibe/coral-reef.html', theme: 'dark', accent: '#ff7744', accent2: '#22ccaa', dim: '#6a90a0', border: '#0a2a3a', bg: '#031520', font: "'Fredoka', sans-serif" },
   { name: '極光', file: 'vibe/aurora.html', theme: 'dark', accent: '#00ff88', accent2: '#44ffaa', dim: '#80a090', border: '#1a3028', bg: '#050810', font: "'Fredoka', sans-serif" },
+  { name: '101跨年', file: 'vibe/taipei101.html', theme: 'dark', accent: '#ff4488', accent2: '#44ddff', dim: '#8090aa', border: '#1a1a30', bg: '#020818', font: "'Righteous', sans-serif" },
 ];
 
 let currentVibeIndex = parseInt(localStorage.getItem('vibeIndex') || '0');

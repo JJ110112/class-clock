@@ -7,7 +7,7 @@
 </style>
 </head>
 <body>
-<script src="../phaser.min.js"></script>
+<script src="../js/phaser.min.js"></script>
 <script>
 /* ═══════════════════════════════
    像素冒險 – Pixel Art Game
@@ -15,6 +15,9 @@
 
 let smoothWindX = 0, smoothWindY = 0;
 const WIND_DECAY = 0.90, WIND_GAIN = 1.0;
+let mouseX = -999, mouseY = -999;
+const WIND_RADIUS = 200;
+function windAt(x, y) { const dx=x-mouseX, dy=y-mouseY, d=Math.sqrt(dx*dx+dy*dy); return d<WIND_RADIUS?1-d/WIND_RADIUS:0; }
 let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
 
 const DENSITIES = [
@@ -26,6 +29,7 @@ let densityIdx = 1;
 let scene = null;
 
 function onMouseMove(d) {
+  mouseX = d.x; mouseY = d.y;
   smoothWindX += d.windVX * d.windStrength * WIND_GAIN;
   smoothWindY += d.windVY * d.windStrength * WIND_GAIN;
 }
@@ -451,7 +455,7 @@ class PixelGameScene extends Phaser.Scene {
 
     // Clouds drift
     this.clouds.forEach(c => {
-      c.g.x += c.speed + smoothWindX * 15 * dt;
+      c.g.x += c.speed + smoothWindX * 15 * dt * windAt(c.g.x, c.g.y);
       if (c.g.x > W + 100) c.g.x = -100;
       if (c.g.x < -150) c.g.x = W + 100;
     });

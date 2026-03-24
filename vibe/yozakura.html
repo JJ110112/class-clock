@@ -7,19 +7,26 @@
 </style>
 </head>
 <body>
-<script src="../phaser.min.js"></script>
+<script src="../js/celestial.js"></script>
+<script src="../js/phaser.min.js"></script>
 <script>
 /* ═══════════════════════════════
    夜櫻 – Night Sakura
    ═══════════════════════════════ */
 
-// ── Wind state ──
+// ── Wind state (proximity-based) ──
 let smoothWindX = 0, smoothWindY = 0;
 const WIND_DECAY = 0.92, WIND_GAIN = 1.5;
-let mousePos = { x: -999, y: -999 };
+let mouseX = -999, mouseY = -999;
+const WIND_RADIUS = 200;
+function windAt(x, y) {
+  const dx = x - mouseX, dy = y - mouseY;
+  const d = Math.sqrt(dx*dx + dy*dy);
+  return d < WIND_RADIUS ? 1 - d / WIND_RADIUS : 0;
+}
 
-// ── Time for moon ──
-let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
+// ── Celestial body ──
+const moon = new CelestialBody({ type: 'moon', radius: 18 });
 
 // ── Density ──
 const DENSITIES = [
@@ -30,37 +37,27 @@ const DENSITIES = [
 let densityIdx = 1;
 
 function onMouseMove(d) {
-  mousePos.x = d.x; mousePos.y = d.y;
+  mouseX = d.x; mouseY = d.y;
   smoothWindX += d.windVX * d.windStrength * WIND_GAIN;
   smoothWindY += d.windVY * d.windStrength * WIND_GAIN;
 }
 
 window.addEventListener('message', (e) => {
   if (e.data.type === 'mousemove') onMouseMove(e.data);
-  if (e.data.type === 'time') { currentHour = e.data.hours; currentMin = e.data.minutes; }
+  if (e.data.type === 'time') { moon.setTime(e.data.hours, e.data.minutes); }
   if (e.data.type === 'density') {
     densityIdx = (densityIdx + e.data.dir + DENSITIES.length) % DENSITIES.length;
     if (scene) scene.rebuildPetals();
     parent.postMessage({ type: 'densityLabel', label: DENSITIES[densityIdx].label }, '*');
   }
-  if (e.data.type === 'click' && scene) scene.spawnClickBlossoms(e.data.x, e.data.y);
+  if (e.data.type === 'click') {
+    if (!moon.handleClick(e.data.x, e.data.y) && scene) scene.spawnClickBlossoms(e.data.x, e.data.y);
+  }
 });
 
 const W = window.innerWidth, H = window.innerHeight;
 const COLORS = [0xffb7c5, 0xffc0cb, 0xffe4e1, 0xff99aa];
 let scene = null;
-
-// ── Moon position from time (arc: 18h→rise left, 0h→top, 6h→set right) ──
-function getMoonPos() {
-  const t = currentHour + currentMin / 60;
-  // Visible 18:00–06:00, arc across sky
-  const prog = ((t < 12 ? t + 24 : t) - 18) / 12; // 0→1 over 12h
-  const p = Phaser.Math.Clamp(prog, 0, 1);
-  const x = Phaser.Math.Linear(W * 0.1, W * 0.9, p);
-  const y = H * 0.08 + Math.sin(p * Math.PI) * (-H * 0.05); // slight arc up
-  const alpha = p > 0 && p < 1 ? 0.7 : 0.15;
-  return { x, y, alpha };
-}
 
 class YozakuraScene extends Phaser.Scene {
   constructor() { super('yozakura'); }
@@ -72,10 +69,6 @@ class YozakuraScene extends Phaser.Scene {
     bg.fillRect(0, 0, W, H);
     bg.setDepth(-10);
 
-    // Moon
-    this.moonGlow = this.add.circle(0, 0, 50, 0xe2e8f0, 0.08).setDepth(4);
-    this.moon = this.add.circle(0, 0, 18, 0xe2e8f0, 0.7).setDepth(5);
-
     // Petals
     this.petals = [];
     this.rebuildPetals();
@@ -85,7 +78,7 @@ class YozakuraScene extends Phaser.Scene {
 
     // Piled petals on ground
     this.piledG = this.add.graphics().setDepth(1);
-    this.piled = []; // { x, y, size, color, alpha, age }
+    this.piled = [];
   }
 
   rebuildPetals() {
@@ -120,7 +113,6 @@ class YozakuraScene extends Phaser.Scene {
       const size = Phaser.Math.FloatBetween(4, 12);
       const color = Phaser.Utils.Array.GetRandom(COLORS);
       const g = this.add.graphics().setDepth(8);
-      // 5-petal cherry blossom
       const petalCount = 5;
       g.fillStyle(color, Phaser.Math.FloatBetween(0.5, 0.85));
       for (let p = 0; p < petalCount; p++) {
@@ -129,7 +121,6 @@ class YozakuraScene extends Phaser.Scene {
         const py = Math.sin(angle) * size * 0.5;
         g.fillEllipse(px, py, size * 0.7, size * 0.4);
       }
-      // Center
       g.fillStyle(0xffeecc, 0.8);
       g.fillCircle(0, 0, size * 0.15);
       g.setPosition(cx, cy);
@@ -152,14 +143,17 @@ class YozakuraScene extends Phaser.Scene {
     smoothWindX *= WIND_DECAY;
     smoothWindY *= WIND_DECAY;
 
+    // Celestial body
+    moon.update(dt);
+
     const groundY = H - 5;
     this.petals.forEach(p => {
       p.swingPhase += p.swingSpeed;
-      p.g.x += Math.sin(p.swingPhase) * p.swingAmp + smoothWindX * 40 * dt;
-      p.g.y += p.baseSpeed + smoothWindY * 15 * dt;
-      p.g.rotation += p.rotSpeed + smoothWindX * 0.01;
+      const pw = windAt(p.g.x, p.g.y);
+      p.g.x += Math.sin(p.swingPhase) * p.swingAmp + smoothWindX * 40 * dt * pw;
+      p.g.y += p.baseSpeed + smoothWindY * 15 * dt * pw;
+      p.g.rotation += p.rotSpeed + smoothWindX * 0.01 * pw;
       if (p.g.y > groundY) {
-        // Pile up
         if (this.piled.length < 120) {
           this.piled.push({
             x: p.g.x, y: groundY - Phaser.Math.FloatBetween(0, 8),
@@ -174,36 +168,26 @@ class YozakuraScene extends Phaser.Scene {
       }
     });
 
-    // Update click-spawned blossoms
     this.clickBlossoms = this.clickBlossoms.filter(b => {
       b.life -= dt;
       if (b.life <= 0) { b.g.destroy(); return false; }
-      b.g.x += (b.vx + smoothWindX * 35) * dt;
+      b.g.x += (b.vx + smoothWindX * 35 * windAt(b.g.x, b.g.y)) * dt;
       b.g.y += b.vy * dt;
-      b.vy += 25 * dt; // gentle gravity
+      b.vy += 25 * dt;
       b.g.rotation += b.rotSpeed;
       b.g.alpha = Math.min(1, b.life / b.maxLife * 1.5);
       return true;
     });
 
-    // Draw piled petals
     this.piledG.clear();
     this.piled = this.piled.filter(p => {
       p.age += dt;
-      if (p.age > 4) p.alpha -= dt * 0.3; // fade after 4s
+      if (p.age > 4) p.alpha -= dt * 0.3;
       if (p.alpha <= 0) return false;
       this.piledG.fillStyle(p.color, p.alpha * 0.5);
       this.piledG.fillEllipse(p.x, p.y, p.size * 2, p.size * 0.8);
       return true;
     });
-
-    // Moon follows time
-    const mp = getMoonPos();
-    this.moon.x = Phaser.Math.Linear(this.moon.x, mp.x, 0.02);
-    this.moon.y = Phaser.Math.Linear(this.moon.y, mp.y, 0.02);
-    this.moon.alpha = mp.alpha;
-    this.moonGlow.setPosition(this.moon.x, this.moon.y);
-    this.moonGlow.alpha = mp.alpha * 0.12;
   }
 }
 

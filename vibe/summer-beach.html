@@ -7,7 +7,7 @@
 </style>
 </head>
 <body>
-<script src="../phaser.min.js"></script>
+<script src="../js/phaser.min.js"></script>
 <script>
 /* ═══════════════════════════════
    夏日海灘 – Summer Beach
@@ -15,6 +15,8 @@
 
 let smoothWindX = 0, smoothWindY = 0;
 const WIND_DECAY = 0.90, WIND_GAIN = 1.2;
+const WIND_RADIUS = 200;
+function windAt(x, y) { const dx=x-mousePos.x, dy=y-mousePos.y, d=Math.sqrt(dx*dx+dy*dy); return d<WIND_RADIUS?1-d/WIND_RADIUS:0; }
 let mousePos = { x: -999, y: -999 };
 let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
 
@@ -190,7 +192,7 @@ class SummerBeachScene extends Phaser.Scene {
       const targetSway = mouseNear * pushDir * 0.5;
       palm.swayOffset += (targetSway - palm.swayOffset) * 0.08;
       // Also add wind
-      const windSway = smoothWindX * 0.03;
+      const windSway = smoothWindX * 0.03 * windAt(palm.topX, palm.topY);
       const totalSway = palm.swayOffset + windSway;
 
       palm.fronds.forEach(f => {
@@ -383,7 +385,7 @@ class SummerBeachScene extends Phaser.Scene {
 
     // ── Clouds drift ──
     this.clouds.forEach(c => {
-      c.g.x += c.speed + smoothWindX * 12 * dt;
+      c.g.x += c.speed + smoothWindX * 12 * dt * windAt(c.g.x, c.g.y);
       if (c.g.x > W + 140) c.g.x = -140;
       if (c.g.x < -180) c.g.x = W + 140;
     });
@@ -439,7 +441,7 @@ class SummerBeachScene extends Phaser.Scene {
       }
       s.fleeVX *= 0.94; s.fleeVY *= 0.94;
 
-      s.g.x += s.vx + s.fleeVX + smoothWindX * 8 * dt;
+      s.g.x += s.vx + s.fleeVX + smoothWindX * 8 * dt * windAt(s.g.x, s.g.y);
       s.g.y += s.vy + s.fleeVY;
 
       // Keep in bounds

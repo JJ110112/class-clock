@@ -7,7 +7,8 @@
 </style>
 </head>
 <body>
-<script src="../phaser.min.js"></script>
+<script src="../js/celestial.js"></script>
+<script src="../js/phaser.min.js"></script>
 <script>
 /* ═══════════════════════════════
    平溪天燈 – Sky Lanterns
@@ -16,7 +17,10 @@
 let smoothWindX = 0, smoothWindY = 0;
 const WIND_DECAY = 0.93, WIND_GAIN = 0.8;
 let mousePos = { x: -999, y: -999 };
-let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
+let mouseX = -999, mouseY = -999;
+const WIND_RADIUS = 200;
+function windAt(x, y) { const dx=x-mouseX, dy=y-mouseY, d=Math.sqrt(dx*dx+dy*dy); return d<WIND_RADIUS?1-d/WIND_RADIUS:0; }
+const moon = new CelestialBody({ type: 'moon', radius: 15 });
 
 const BLESSINGS_1 = ['福','安','順','夢','愛','財','喜','樂','旺','緣','健','壽'];
 const BLESSINGS_2 = ['平安','幸福','順利','圓滿','如意','心願','發財','健康','喜樂','好運','長久','成功','富貴','無憂','相伴'];
@@ -50,34 +54,24 @@ let scene = null;
 
 function onMouseMove(d) {
   mousePos.x = d.x; mousePos.y = d.y;
+  mouseX = d.x; mouseY = d.y;
   smoothWindX += d.windVX * d.windStrength * WIND_GAIN;
   smoothWindY += d.windVY * d.windStrength * WIND_GAIN;
 }
 
 window.addEventListener('message', (e) => {
   if (e.data.type === 'mousemove') onMouseMove(e.data);
-  if (e.data.type === 'time') { currentHour = e.data.hours; currentMin = e.data.minutes; }
+  if (e.data.type === 'time') { moon.setTime(e.data.hours, e.data.minutes); }
   if (e.data.type === 'density') {
     trainTypeIdx = (trainTypeIdx + e.data.dir + TRAIN_TYPES.length) % TRAIN_TYPES.length;
     parent.postMessage({ type: 'densityLabel', label: TRAIN_TYPES[trainTypeIdx].label }, '*');
   }
-  if (e.data.type === 'click' && scene) {
-    scene.spawnLantern(e.data.x, e.data.y);
+  if (e.data.type === 'click') {
+    if (!moon.handleClick(e.data.x, e.data.y) && scene) scene.spawnLantern(e.data.x, e.data.y);
   }
 });
 
 const W = window.innerWidth, H = window.innerHeight;
-
-function getMoonPos() {
-  const t = currentHour + currentMin / 60;
-  const prog = ((t < 12 ? t + 24 : t) - 18) / 12;
-  const p = Phaser.Math.Clamp(prog, 0, 1);
-  return {
-    x: Phaser.Math.Linear(W * 0.1, W * 0.9, p),
-    y: H * 0.08 + Math.sin(p * Math.PI) * (-H * 0.04),
-    alpha: p > 0 && p < 1 ? 0.5 : 0.1,
-  };
-}
 
 class SkyLanternScene extends Phaser.Scene {
   constructor() { super('sky-lantern'); }
@@ -104,10 +98,6 @@ class SkyLanternScene extends Phaser.Scene {
     this.trainActive = false;
     this.nextTrain = Phaser.Math.Between(5000, 10000);
     this.smokeParticles = [];
-
-    // ── Moon ──
-    this.moonGlow = this.add.circle(0, 0, 40, 0xffe8c0, 0.06).setDepth(-4);
-    this.moon = this.add.circle(0, 0, 14, 0xffe8c0, 0.5).setDepth(-3);
 
     // ── Stars ──
     this.starsG = this.add.graphics().setDepth(-5);
@@ -275,7 +265,7 @@ class SkyLanternScene extends Phaser.Scene {
   updateSmoke(dt) {
     const g = this.trainG;
     this.smokeParticles = this.smokeParticles.filter(s => {
-      s.x += s.vx + smoothWindX * 3 * dt;
+      s.x += s.vx + smoothWindX * 3 * dt * windAt(s.x, s.y);
       s.y += s.vy;
       s.size += 0.15;
       s.alpha -= dt * 0.4;
@@ -380,14 +370,7 @@ class SkyLanternScene extends Phaser.Scene {
     const dt = delta / 1000;
     smoothWindX *= WIND_DECAY;
     smoothWindY *= WIND_DECAY;
-
-    // Moon
-    const mp = getMoonPos();
-    this.moon.x = Phaser.Math.Linear(this.moon.x, mp.x, 0.02);
-    this.moon.y = Phaser.Math.Linear(this.moon.y, mp.y, 0.02);
-    this.moon.alpha = mp.alpha;
-    this.moonGlow.setPosition(this.moon.x, this.moon.y);
-    this.moonGlow.alpha = mp.alpha * 0.1;
+    moon.update(dt);
 
     // Train
     this.nextTrain -= delta;
@@ -420,7 +403,7 @@ class SkyLanternScene extends Phaser.Scene {
       }
 
       // Wind
-      l.vx += smoothWindX * 0.01;
+      l.vx += smoothWindX * 0.01 * windAt(l.x, l.y);
       l.vx *= 0.98;
       l.x += l.vx;
 

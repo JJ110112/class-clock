@@ -8,6 +8,7 @@
 </style>
 </head>
 <body>
+<script src="../js/celestial.js"></script>
 <script type="importmap">
 {
   "imports": {
@@ -37,6 +38,7 @@ const PALETTES = [
   { label: '紫霧銀河', inner: new THREE.Color(0xdd88ff), outer: new THREE.Color(0x1a0044) },
 ];
 let paletteIdx = 0;
+const celestial = new CelestialBody({ type: 'moon', radius: 16, zIndex: 1 });
 
 // ── Shooting stars ──
 let shootingStars = [];
@@ -57,7 +59,7 @@ window.addEventListener('message', (e) => {
     parent.postMessage({ type: 'densityLabel', label: PALETTES[paletteIdx].label }, '*');
   }
   if (e.data.type === 'click') {
-    spawnMeteorShower(e.data.x, e.data.y);
+    if (!celestial.handleClick(e.data.x, e.data.y)) spawnMeteorShower(e.data.x, e.data.y);
   }
 });
 
@@ -293,38 +295,10 @@ function updateShootingStars(dt) {
   ctx.globalAlpha = 1;
 }
 
-// ═══════════════════════════════
-//  Moon (2D overlay)
-// ═══════════════════════════════
-let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
+// ── Time handler for celestial ──
 window.addEventListener('message', (e) => {
-  if (e.data.type === 'time') { currentHour = e.data.hours; currentMin = e.data.minutes; }
+  if (e.data.type === 'time') { celestial.setTime(e.data.hours, e.data.minutes); }
 });
-
-function drawMoon() {
-  const t = currentHour + currentMin / 60;
-  const prog = ((t < 12 ? t + 24 : t) - 18) / 12;
-  const p = Math.max(0, Math.min(1, prog));
-  const mx = W * 0.1 + p * W * 0.8;
-  const my = H * 0.08 + Math.sin(p * Math.PI) * (-H * 0.05);
-  const alpha = p > 0 && p < 1 ? 0.6 : 0.1;
-
-  // Glow
-  ctx.globalAlpha = alpha * 0.1;
-  const glow = ctx.createRadialGradient(mx, my, 0, mx, my, 50);
-  glow.addColorStop(0, '#e2e8f0');
-  glow.addColorStop(1, 'transparent');
-  ctx.fillStyle = glow;
-  ctx.fillRect(mx - 55, my - 55, 110, 110);
-
-  // Disc
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = '#e2e8f0';
-  ctx.beginPath();
-  ctx.arc(mx, my, 16, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-}
 
 // ═══════════════════════════════
 //  Init & Animation Loop
@@ -359,7 +333,7 @@ function animate() {
 
   // 2D overlay
   updateShootingStars(dt);
-  drawMoon();
+  celestial.update(dt);
 }
 
 animate();

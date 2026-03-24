@@ -23,6 +23,8 @@ window.addEventListener('resize', () => { W = canvas.width = window.innerWidth; 
 let mousePos = { x: -999, y: -999 };
 let smoothWindX = 0, smoothWindY = 0;
 const WIND_DECAY = 0.93, WIND_GAIN = 0.6;
+const WIND_RADIUS = 200;
+function windAt(x, y) { const dx=x-mousePos.x, dy=y-mousePos.y, d=Math.sqrt(dx*dx+dy*dy); return d<WIND_RADIUS?1-d/WIND_RADIUS:0; }
 
 const DENSITIES = [
   { label: '寧靜珊瑚', spawn: 8,  fish: 6 },
@@ -410,7 +412,7 @@ function drawSeaweed(sw, time) {
   const segH = sw.height / sw.segments;
   for (let s = 1; s <= sw.segments; s++) {
     const t = s / sw.segments;
-    const sway = Math.sin(time * 0.002 + sw.phase + s * 0.5) * 12 * t + smoothWindX * 8 * t;
+    const sway = Math.sin(time * 0.002 + sw.phase + s * 0.5) * 12 * t + smoothWindX * 8 * t * windAt(sw.x, sw.baseY - s * segH);
     ctx.lineTo(sw.x + sway, sw.baseY - s * segH);
   }
   ctx.stroke();
@@ -419,7 +421,7 @@ function drawSeaweed(sw, time) {
   ctx.globalAlpha = 0.5;
   for (let s = 2; s <= sw.segments; s += 2) {
     const t = s / sw.segments;
-    const sway = Math.sin(time * 0.002 + sw.phase + s * 0.5) * 12 * t + smoothWindX * 8 * t;
+    const sway = Math.sin(time * 0.002 + sw.phase + s * 0.5) * 12 * t + smoothWindX * 8 * t * windAt(sw.x, sw.baseY - s * segH);
     const lx = sw.x + sway, ly = sw.baseY - s * segH;
     ctx.beginPath();
     ctx.ellipse(lx + 6 * (s % 4 === 0 ? 1 : -1), ly, 6, 3, (s%4===0?0.3:-0.3), 0, Math.PI*2);
@@ -668,7 +670,7 @@ function animate() {
   // ── Light rays from surface ──
   lightRays.forEach(r => {
     r.phase += 0.005;
-    const sway = Math.sin(r.phase) * 30 + smoothWindX * 15;
+    const sway = Math.sin(r.phase) * 30 + smoothWindX * 15 * windAt(r.x, H * 0.5);
     const alpha = r.alpha + Math.sin(now * 0.001 + r.phase) * 0.015;
     const grad = ctx.createLinearGradient(r.x + sway, 0, r.x + sway + r.width * 0.3, H);
     grad.addColorStop(0, `rgba(120,200,255,${alpha * 2})`);
@@ -716,7 +718,7 @@ function animate() {
   if (spawnTimer > 0.5) { spawnTimer = 0; emitSpawn(); }
   ctx.globalAlpha = 1;
   spawnParticles = spawnParticles.filter(p => {
-    p.x += p.vx + smoothWindX * 2 * dt;
+    p.x += p.vx + smoothWindX * 2 * dt * windAt(p.x, p.y);
     p.y += p.vy;
     p.vy *= 0.998;
     p.life -= dt;
@@ -739,7 +741,7 @@ function animate() {
   ctx.globalAlpha = 1;
   fishes.forEach(f => {
     f.tailPhase += 0.08;
-    f.x += f.vx + smoothWindX * 3 * dt;
+    f.x += f.vx + smoothWindX * 3 * dt * windAt(f.x, f.y);
     f.y += f.vy + Math.sin(now * 0.002 + f.x * 0.01) * 0.15;
     // Mouse avoidance
     const dx = f.x - mousePos.x, dy = f.y - mousePos.y;
@@ -811,7 +813,7 @@ function animate() {
   if (Math.random() < 0.03) emitBubble();
   ctx.globalAlpha = 1;
   bubbles = bubbles.filter(b => {
-    b.x += Math.sin(now * 0.003 + b.x) * 0.2 + smoothWindX * 2 * dt;
+    b.x += Math.sin(now * 0.003 + b.x) * 0.2 + smoothWindX * 2 * dt * windAt(b.x, b.y);
     b.y += b.vy;
     b.alpha -= 0.001;
     if (b.y < -10 || b.alpha <= 0) return false;

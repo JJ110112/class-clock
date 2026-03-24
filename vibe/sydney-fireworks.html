@@ -7,7 +7,8 @@
 </style>
 </head>
 <body>
-<script src="../phaser.min.js"></script>
+<script src="../js/celestial.js"></script>
+<script src="../js/phaser.min.js"></script>
 <script>
 /* ═══════════════════════════════
    雪梨煙火 – Sydney Fireworks
@@ -16,7 +17,10 @@
 let smoothWindX = 0, smoothWindY = 0;
 const WIND_DECAY = 0.92, WIND_GAIN = 0.6;
 let mousePos = { x: -999, y: -999 };
-let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
+let mouseX = -999, mouseY = -999;
+const WIND_RADIUS = 200;
+function windAt(x, y) { const dx=x-mouseX, dy=y-mouseY, d=Math.sqrt(dx*dx+dy*dy); return d<WIND_RADIUS?1-d/WIND_RADIUS:0; }
+const moon = new CelestialBody({ type: 'moon', radius: 14 });
 
 const FW_TYPES = [
   { label: '牡丹花火', type: 'sphere' },
@@ -41,34 +45,24 @@ const FW_COLORS = [
 
 function onMouseMove(d) {
   mousePos.x = d.x; mousePos.y = d.y;
+  mouseX = d.x; mouseY = d.y;
   smoothWindX += d.windVX * d.windStrength * WIND_GAIN;
   smoothWindY += d.windVY * d.windStrength * WIND_GAIN;
 }
 
 window.addEventListener('message', (e) => {
   if (e.data.type === 'mousemove') onMouseMove(e.data);
-  if (e.data.type === 'time') { currentHour = e.data.hours; currentMin = e.data.minutes; }
+  if (e.data.type === 'time') { moon.setTime(e.data.hours, e.data.minutes); }
   if (e.data.type === 'density') {
     typeIdx = (typeIdx + e.data.dir + FW_TYPES.length) % FW_TYPES.length;
     parent.postMessage({ type: 'densityLabel', label: FW_TYPES[typeIdx].label }, '*');
   }
-  if (e.data.type === 'click' && scene) {
-    scene.clickFirework(e.data.x, e.data.y);
+  if (e.data.type === 'click') {
+    if (!moon.handleClick(e.data.x, e.data.y) && scene) scene.clickFirework(e.data.x, e.data.y);
   }
 });
 
 const W = window.innerWidth, H = window.innerHeight;
-
-function getMoonPos() {
-  const t = currentHour + currentMin / 60;
-  const prog = ((t < 12 ? t + 24 : t) - 18) / 12;
-  const p = Phaser.Math.Clamp(prog, 0, 1);
-  return {
-    x: Phaser.Math.Linear(W * 0.1, W * 0.9, p),
-    y: H * 0.06 + Math.sin(p * Math.PI) * (-H * 0.03),
-    alpha: p > 0 && p < 1 ? 0.4 : 0.08,
-  };
-}
 
 class SydneyScene extends Phaser.Scene {
   constructor() { super('sydney'); }
@@ -87,10 +81,6 @@ class SydneyScene extends Phaser.Scene {
       starsG.fillStyle(0xe8e8ff, Phaser.Math.FloatBetween(0.1, 0.4));
       starsG.fillCircle(Phaser.Math.Between(0, W), Phaser.Math.Between(0, H * 0.5), Phaser.Math.FloatBetween(0.4, 1.2));
     }
-
-    // ── Moon ──
-    this.moonGlow = this.add.circle(0, 0, 40, 0xd0d0f0, 0.05).setDepth(-6);
-    this.moon = this.add.circle(0, 0, 13, 0xd0d0f0, 0.4).setDepth(-5);
 
     // ── Water ──
     this.waterY = H * 0.68;
@@ -348,14 +338,7 @@ class SydneyScene extends Phaser.Scene {
     const dt = delta / 1000;
     smoothWindX *= WIND_DECAY;
     smoothWindY *= WIND_DECAY;
-
-    // Moon
-    const mp = getMoonPos();
-    this.moon.x = Phaser.Math.Linear(this.moon.x, mp.x, 0.02);
-    this.moon.y = Phaser.Math.Linear(this.moon.y, mp.y, 0.02);
-    this.moon.alpha = mp.alpha;
-    this.moonGlow.setPosition(this.moon.x, this.moon.y);
-    this.moonGlow.alpha = mp.alpha * 0.08;
+    moon.update(dt);
 
     // Sailboats (draw far→near for correct overlap)
     this.sailboatG.clear();
@@ -366,7 +349,7 @@ class SydneyScene extends Phaser.Scene {
       const info = this.getSailboatSize(b.y);
       const s = info.size;
 
-      b.x += b.dirX * (b.speedX + info.speed) * 0.5 + smoothWindX * 2 * dt;
+      b.x += b.dirX * (b.speedX + info.speed) * 0.5 + smoothWindX * 2 * dt * windAt(b.x, b.y);
       b.y += b.dirY * b.speedY;
       b.bobPhase += 0.02;
       const bob = Math.sin(b.bobPhase) * 2 * s;
@@ -460,7 +443,7 @@ class SydneyScene extends Phaser.Scene {
         if (p.life <= 0) { p.g.destroy(); return false; }
         alive = true;
         p.vy += p.gravity;
-        p.vx += smoothWindX * 0.005;
+        p.vx += smoothWindX * 0.005 * windAt(p.g.x, p.g.y);
         p.g.x += p.vx;
         p.g.y += p.vy;
         p.g.alpha = Math.max(0, p.life);

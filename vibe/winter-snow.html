@@ -7,7 +7,8 @@
 </style>
 </head>
 <body>
-<script src="../phaser.min.js"></script>
+<script src="../js/celestial.js"></script>
+<script src="../js/phaser.min.js"></script>
 <script>
 /* ═══════════════════════════════
    冬雪 – Winter Snow (daytime + sun)
@@ -15,8 +16,9 @@
 
 let smoothWindX = 0, smoothWindY = 0;
 const WIND_DECAY = 0.93, WIND_GAIN = 1.5;
-let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
-
+let mouseX = -999, mouseY = -999;
+const WIND_RADIUS = 200;
+function windAt(x, y) { const dx=x-mouseX, dy=y-mouseY, d=Math.sqrt(dx*dx+dy*dy); return d<WIND_RADIUS?1-d/WIND_RADIUS:0; }
 const DENSITIES = [
   { label: '小雪',   count: 40 },
   { label: '中雪',   count: 90 },
@@ -24,35 +26,28 @@ const DENSITIES = [
 ];
 let densityIdx = 1;
 let scene = null;
+const sun = new CelestialBody({ type: 'sun', radius: 28 });
 
 function onMouseMove(d) {
+  mouseX = d.x; mouseY = d.y;
   smoothWindX += d.windVX * d.windStrength * WIND_GAIN;
   smoothWindY += d.windVY * d.windStrength * WIND_GAIN;
 }
 
 window.addEventListener('message', (e) => {
   if (e.data.type === 'mousemove') onMouseMove(e.data);
-  if (e.data.type === 'time') { currentHour = e.data.hours; currentMin = e.data.minutes; }
+  if (e.data.type === 'time') { sun.setTime(e.data.hours, e.data.minutes); }
   if (e.data.type === 'density') {
     densityIdx = (densityIdx + e.data.dir + DENSITIES.length) % DENSITIES.length;
     if (scene) scene.rebuildSnow();
     parent.postMessage({ type: 'densityLabel', label: DENSITIES[densityIdx].label }, '*');
   }
-  if (e.data.type === 'click' && scene) scene.spawnHexFlakes(e.data.x, e.data.y);
+  if (e.data.type === 'click') {
+    if (!sun.handleClick(e.data.x, e.data.y) && scene) scene.spawnHexFlakes(e.data.x, e.data.y);
+  }
 });
 
 const W = window.innerWidth, H = window.innerHeight;
-
-function getSunPos() {
-  const t = currentHour + currentMin / 60;
-  const prog = (t - 6) / 12;
-  const p = Phaser.Math.Clamp(prog, 0, 1);
-  return {
-    x: Phaser.Math.Linear(W * 0.08, W * 0.92, p),
-    y: H * 0.12 - Math.sin(p * Math.PI) * H * 0.08,
-    alpha: p > 0 && p < 1 ? 0.7 : 0.1,
-  };
-}
 
 class WinterScene extends Phaser.Scene {
   constructor() { super('winter'); }
@@ -67,11 +62,6 @@ class WinterScene extends Phaser.Scene {
     const ground = this.add.graphics();
     ground.fillGradientStyle(0xf0f4f8, 0xeef2f6, 0xffffff, 0xffffff, 1);
     ground.fillRect(0, H * 0.88, W, H * 0.12).setDepth(0);
-
-    // Sun
-    this.sunRays = this.add.circle(0, 0, 90, 0xfbbf24, 0.06).setDepth(3);
-    this.sunGlow = this.add.circle(0, 0, 50, 0xfbbf24, 0.12).setDepth(4);
-    this.sun = this.add.circle(0, 0, 26, 0xfbbf24, 0.7).setDepth(5);
 
     this.snowflakes = [];
     this.rebuildSnow();
@@ -149,12 +139,14 @@ class WinterScene extends Phaser.Scene {
     const dt = delta / 1000;
     smoothWindX *= WIND_DECAY;
     smoothWindY *= WIND_DECAY;
+    sun.update(dt);
 
     const groundY = H * 0.88;
     this.snowflakes.forEach(s => {
       s.swingPhase += s.swingSpeed;
-      s.g.x += Math.sin(s.swingPhase) * s.swingAmp + smoothWindX * 35 * dt;
-      s.g.y += s.speed + smoothWindY * 10 * dt;
+      const sw = windAt(s.g.x, s.g.y);
+      s.g.x += Math.sin(s.swingPhase) * s.swingAmp + smoothWindX * 35 * dt * sw;
+      s.g.y += s.speed + smoothWindY * 10 * dt * sw;
       if (s.g.y > groundY) {
         if (this.piled.length < 150) {
           this.piled.push({
@@ -187,7 +179,7 @@ class WinterScene extends Phaser.Scene {
     this.hexFlakes = this.hexFlakes.filter(f => {
       f.life -= dt;
       if (f.life <= 0) { f.g.destroy(); return false; }
-      f.g.x += (f.vx + smoothWindX * 20) * dt;
+      f.g.x += (f.vx + smoothWindX * 20 * windAt(f.g.x, f.g.y)) * dt;
       f.g.y += (f.vy + 30) * dt;
       f.vy += 15 * dt; // gentle gravity
       f.g.rotation += f.rotSpeed;
@@ -195,16 +187,6 @@ class WinterScene extends Phaser.Scene {
       return true;
     });
 
-    const sp = getSunPos();
-    this.sun.x = Phaser.Math.Linear(this.sun.x, sp.x, 0.02);
-    this.sun.y = Phaser.Math.Linear(this.sun.y, sp.y, 0.02);
-    this.sun.alpha = sp.alpha;
-    this.sunGlow.setPosition(this.sun.x, this.sun.y);
-    this.sunRays.setPosition(this.sun.x, this.sun.y);
-    const pulse = (Math.sin(time * 0.0015) + 1) / 2;
-    this.sunGlow.alpha = sp.alpha * (0.12 + pulse * 0.06);
-    this.sunRays.alpha = sp.alpha * (0.04 + pulse * 0.04);
-    this.sunRays.setScale(1 + pulse * 0.08);
   }
 }
 

@@ -7,7 +7,8 @@
 </style>
 </head>
 <body>
-<script src="../phaser.min.js"></script>
+<script src="../js/celestial.js"></script>
+<script src="../js/phaser.min.js"></script>
 <script>
 /* ═══════════════════════════════
    秋楓 – Autumn Leaves (daytime)
@@ -15,8 +16,9 @@
 
 let smoothWindX = 0, smoothWindY = 0;
 const WIND_DECAY = 0.90, WIND_GAIN = 2.0;
-let currentHour = new Date().getHours(), currentMin = new Date().getMinutes();
-
+let mouseX = -999, mouseY = -999;
+const WIND_RADIUS = 200;
+function windAt(x, y) { const dx=x-mouseX, dy=y-mouseY, d=Math.sqrt(dx*dx+dy*dy); return d<WIND_RADIUS?1-d/WIND_RADIUS:0; }
 const DENSITIES = [
   { label: '微風落葉', count: 25 },
   { label: '秋風掃落葉', count: 55 },
@@ -24,37 +26,29 @@ const DENSITIES = [
 ];
 let densityIdx = 1;
 let scene = null;
+const sun = new CelestialBody({ type: 'sun', radius: 24 });
 
 function onMouseMove(d) {
+  mouseX = d.x; mouseY = d.y;
   smoothWindX += d.windVX * d.windStrength * WIND_GAIN;
   smoothWindY += d.windVY * d.windStrength * WIND_GAIN;
 }
 
 window.addEventListener('message', (e) => {
   if (e.data.type === 'mousemove') onMouseMove(e.data);
-  if (e.data.type === 'time') { currentHour = e.data.hours; currentMin = e.data.minutes; }
+  if (e.data.type === 'time') { sun.setTime(e.data.hours, e.data.minutes); }
   if (e.data.type === 'density') {
     densityIdx = (densityIdx + e.data.dir + DENSITIES.length) % DENSITIES.length;
     if (scene) scene.rebuildLeaves();
     parent.postMessage({ type: 'densityLabel', label: DENSITIES[densityIdx].label }, '*');
   }
-  if (e.data.type === 'click' && scene) scene.spawnClickLeaves(e.data.x, e.data.y);
+  if (e.data.type === 'click') {
+    if (!sun.handleClick(e.data.x, e.data.y) && scene) scene.spawnClickLeaves(e.data.x, e.data.y);
+  }
 });
 
 const W = window.innerWidth, H = window.innerHeight;
 const LEAF_COLORS = [0xfb923c, 0xf97316, 0xef4444, 0xfbbf24, 0xb45309, 0xdc2626];
-
-// Sun arc: 6h→rise left, 12h→top, 18h→set right
-function getSunPos() {
-  const t = currentHour + currentMin / 60;
-  const prog = (t - 6) / 12; // 0→1 over 6:00–18:00
-  const p = Phaser.Math.Clamp(prog, 0, 1);
-  return {
-    x: Phaser.Math.Linear(W * 0.08, W * 0.92, p),
-    y: H * 0.15 - Math.sin(p * Math.PI) * H * 0.1,
-    alpha: p > 0 && p < 1 ? 0.65 : 0.1,
-  };
-}
 
 class AutumnScene extends Phaser.Scene {
   constructor() { super('autumn'); }
@@ -64,10 +58,6 @@ class AutumnScene extends Phaser.Scene {
     const bg = this.add.graphics();
     bg.fillGradientStyle(0xe8d5b8, 0xf0dcc0, 0xf5e6d0, 0xfaf0e0, 1);
     bg.fillRect(0, 0, W, H).setDepth(-10);
-
-    this.sunGlowOuter = this.add.circle(0, 0, 80, 0xfbbf24, 0.08).setDepth(3);
-    this.sunGlow = this.add.circle(0, 0, 45, 0xfbbf24, 0.15).setDepth(4);
-    this.sun = this.add.circle(0, 0, 22, 0xfbbf24, 0.6).setDepth(5);
 
     this.leaves = [];
     this.rebuildLeaves();
@@ -150,13 +140,15 @@ class AutumnScene extends Phaser.Scene {
     const dt = delta / 1000;
     smoothWindX *= WIND_DECAY;
     smoothWindY *= WIND_DECAY;
+    sun.update(dt);
 
     const groundY = H - 8;
     this.leaves.forEach(l => {
       l.swingPhase += l.swingSpeed;
-      l.g.x += Math.sin(l.swingPhase) * l.swingAmp + smoothWindX * 60 * dt;
-      l.g.y += l.speed + smoothWindY * 20 * dt;
-      l.g.rotation += l.rotSpeed + smoothWindX * 0.015;
+      const lw = windAt(l.g.x, l.g.y);
+      l.g.x += Math.sin(l.swingPhase) * l.swingAmp + smoothWindX * 60 * dt * lw;
+      l.g.y += l.speed + smoothWindY * 20 * dt * lw;
+      l.g.rotation += l.rotSpeed + smoothWindX * 0.015 * lw;
       if (l.g.y > groundY) {
         if (this.piled.length < 100) {
           this.piled.push({
@@ -177,10 +169,11 @@ class AutumnScene extends Phaser.Scene {
     this.clickLeaves = this.clickLeaves.filter(cl => {
       cl.life -= dt;
       if (cl.life <= 0) { cl.g.destroy(); return false; }
-      cl.g.x += (cl.vx + smoothWindX * 50) * dt;
+      const cw = windAt(cl.g.x, cl.g.y);
+      cl.g.x += (cl.vx + smoothWindX * 50 * cw) * dt;
       cl.g.y += (cl.vy) * dt;
       cl.vy += 40 * dt; // gravity
-      cl.g.rotation += cl.rotSpeed + smoothWindX * 0.02;
+      cl.g.rotation += cl.rotSpeed + smoothWindX * 0.02 * cw;
       cl.g.alpha = Math.min(1, cl.life / cl.maxLife * 1.5);
       return true;
     });
@@ -203,16 +196,6 @@ class AutumnScene extends Phaser.Scene {
       return true;
     });
 
-    // Sun follows time
-    const sp = getSunPos();
-    this.sun.x = Phaser.Math.Linear(this.sun.x, sp.x, 0.02);
-    this.sun.y = Phaser.Math.Linear(this.sun.y, sp.y, 0.02);
-    this.sun.alpha = sp.alpha;
-    this.sunGlow.setPosition(this.sun.x, this.sun.y);
-    this.sunGlowOuter.setPosition(this.sun.x, this.sun.y);
-    const pulse = (Math.sin(time * 0.002) + 1) / 2;
-    this.sunGlow.alpha = sp.alpha * (0.15 + pulse * 0.08);
-    this.sunGlowOuter.alpha = sp.alpha * (0.05 + pulse * 0.04);
   }
 }
 

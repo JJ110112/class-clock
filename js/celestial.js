@@ -15,7 +15,7 @@ class CelestialBody {
    */
   constructor(opts = {}) {
     this.type = opts.type || 'moon';
-    this.size = opts.size || (this.type === 'sun' ? 100 : 90);
+    this.size = opts.size || (this.type === 'sun' ? 50 : 45);
     const zIdx = opts.zIndex ?? 10;
     this.basePath = opts.basePath || '../img';
 

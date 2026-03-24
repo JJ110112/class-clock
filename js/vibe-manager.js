@@ -66,6 +66,7 @@ function loadVibe(index) {
   clearTimeout(hintTimer);
   hintTimer = setTimeout(() => vibeHint.classList.remove('show'), 2000);
   window.focus();
+  resetAutoSubScene();
 }
 
 // Reclaim focus whenever iframe tries to steal it
@@ -86,11 +87,33 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'ArrowUp') {
     e.preventDefault();
     sendToVibe({ type: 'density', dir: 1 });
+    resetAutoSubScene();
   } else if (e.key === 'ArrowDown') {
     e.preventDefault();
     sendToVibe({ type: 'density', dir: -1 });
+    resetAutoSubScene();
   }
 });
+
+// ══════════════════════════════════
+//  Auto sub-scene cycling
+// ══════════════════════════════════
+const AUTO_SUB_INTERVAL = 30000; // 30 seconds
+let autoSubTimer = null;
+
+function startAutoSubScene() {
+  clearInterval(autoSubTimer);
+  autoSubTimer = setInterval(() => {
+    sendToVibe({ type: 'density', dir: 1 });
+  }, AUTO_SUB_INTERVAL);
+}
+
+function resetAutoSubScene() {
+  // Manual switch resets the timer
+  startAutoSubScene();
+}
+
+startAutoSubScene();
 
 // ══════════════════════════════════
 //  postMessage bridge

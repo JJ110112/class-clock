@@ -232,36 +232,60 @@ class SydneyScene extends Phaser.Scene {
     const g = this.bridgeLightsG;
     const neonColors = [0xff4488, 0x44ddff, 0xffdd44, 0x44ff88, 0xaa44ff];
 
-    this.bridgeLights.forEach(l => {
-      // Mouse proximity → light up
+    // Auto color wave across bridge
+    const waveSpeed = time * 0.0008;
+
+    this.bridgeLights.forEach((l, i) => {
+      // Mouse proximity → light up + star burst
       const dx = mousePos.x - l.x;
       const dy = mousePos.y - l.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const mouseNear = Math.max(0, 1 - dist / 180);
 
-      // Increase brightness when mouse near, decay when not
+      // Auto cycling color wave (always active)
+      const waveIdx = Math.floor((i * 0.3 + waveSpeed) * 2) % neonColors.length;
+      const autoColor = neonColors[waveIdx];
+      const autoPulse = (Math.sin(time * 0.003 + l.phase + i * 0.4) + 1) / 2;
+      const autoBrightness = 0.15 + autoPulse * 0.25;
+
+      // Mouse boost
       if (mouseNear > 0.05) {
-        l.brightness = Math.min(1, l.brightness + mouseNear * dt * 4);
-        const idx = Math.floor((l.phase + time * 0.001) * 2) % neonColors.length;
-        l.color = neonColors[idx];
+        l.brightness = Math.min(1, l.brightness + mouseNear * dt * 5);
+        const mIdx = Math.floor((l.phase + time * 0.002) * 2) % neonColors.length;
+        l.color = neonColors[mIdx];
       } else {
-        l.brightness *= (1 - dt * 1.5); // gradual fade
+        l.brightness *= (1 - dt * 2);
         if (l.brightness < 0.01) l.brightness = 0;
       }
 
-      const pulse = (Math.sin(time * 0.003 + l.phase) + 1) / 2;
-      const baseAlpha = 0.08 + pulse * 0.08; // dim ambient pulse
-      const alpha = baseAlpha + l.brightness * 0.7;
-      const size = 1.5 + l.brightness * 3;
+      const totalBright = Math.min(1, autoBrightness + l.brightness);
+      const displayColor = l.brightness > autoBrightness ? l.color : autoColor;
+      const size = 1.5 + totalBright * 3;
 
-      // Glow
-      if (l.brightness > 0.05) {
-        g.fillStyle(l.color, l.brightness * 0.2);
-        g.fillCircle(l.x, l.y, size + 6);
-      }
+      // Outer glow
+      g.fillStyle(displayColor, totalBright * 0.15);
+      g.fillCircle(l.x, l.y, size + 8);
+      // Inner glow
+      g.fillStyle(displayColor, totalBright * 0.4);
+      g.fillCircle(l.x, l.y, size + 3);
       // Core
-      g.fillStyle(l.brightness > 0.05 ? l.color : l.baseColor, alpha);
+      g.fillStyle(displayColor, totalBright * 0.8 + 0.1);
       g.fillCircle(l.x, l.y, size);
+
+      // ── Star burst when mouse is very close ──
+      if (mouseNear > 0.3) {
+        const starAlpha = (mouseNear - 0.3) * 1.4;
+        const rayCount = 6;
+        g.lineStyle(1, displayColor, starAlpha * 0.5);
+        for (let r = 0; r < rayCount; r++) {
+          const angle = (r / rayCount) * Math.PI * 2 + time * 0.002;
+          const rayLen = 10 + starAlpha * 12;
+          g.lineBetween(
+            l.x + Math.cos(angle) * (size + 2), l.y + Math.sin(angle) * (size + 2),
+            l.x + Math.cos(angle) * rayLen, l.y + Math.sin(angle) * rayLen
+          );
+        }
+      }
     });
   }
 
@@ -406,6 +430,17 @@ class SydneyScene extends Phaser.Scene {
       if (b.y < waterTop) { b.dirY = Math.abs(b.dirY) || 0.04; }
       if (b.y > waterBot) { b.dirY = -Math.abs(b.dirY) || -0.04; }
     });
+
+    // Auto fireworks
+    if (!this.nextAutoFW) this.nextAutoFW = Phaser.Math.Between(1500, 4000);
+    this.nextAutoFW -= delta;
+    if (this.nextAutoFW <= 0) {
+      this.nextAutoFW = Phaser.Math.Between(2000, 5000);
+      const fx = Phaser.Math.Between(W * 0.1, W * 0.9);
+      const fy = Phaser.Math.Between(H * 0.05, H * 0.35);
+      const colors = Phaser.Utils.Array.GetRandom(FW_COLORS);
+      this.explode(fx, fy, colors);
+    }
 
     // Bridge lights
     this.updateBridgeLights(time, dt);

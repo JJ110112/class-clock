@@ -63,7 +63,10 @@ window.addEventListener('message', (e) => {
   if (e.data.type === 'mousemove') onMouseMove(e.data);
   if (e.data.type === 'time') { moon.setTime(e.data.hours, e.data.minutes); }
   if (e.data.type === 'density') {
-    trainTypeIdx = (trainTypeIdx + e.data.dir + TRAIN_TYPES.length) % TRAIN_TYPES.length;
+    // Only change train type when not active (waiting)
+    if (!scene || !scene.trainActive) {
+      trainTypeIdx = (trainTypeIdx + e.data.dir + TRAIN_TYPES.length) % TRAIN_TYPES.length;
+    }
     parent.postMessage({ type: 'densityLabel', label: TRAIN_TYPES[trainTypeIdx].label }, '*');
   }
   if (e.data.type === 'click') {
@@ -135,7 +138,7 @@ class SkyLanternScene extends Phaser.Scene {
 
   drawRailroad() {
     const g = this.add.graphics().setDepth(5);
-    const ry = H * 0.82;
+    const ry = H * 0.92;
     // Ground/platform
     g.fillStyle(0x2a2018, 1);
     g.fillRect(0, ry - 4, W, 20);
@@ -148,21 +151,85 @@ class SkyLanternScene extends Phaser.Scene {
     for (let x = 0; x < W; x += 20) {
       g.lineBetween(x, ry - 2, x, ry + 12);
     }
-    // Station elements
-    const sx = W * 0.35;
-    // Platform sign
-    g.fillStyle(0x1a1510, 1);
-    g.fillRect(sx - 30, ry - 40, 60, 30);
-    g.fillStyle(0xff8800, 0.6);
-    g.fillRect(sx - 26, ry - 37, 52, 24);
-    // Lamp posts
-    for (const lx of [W * 0.2, W * 0.5, W * 0.8]) {
-      g.lineStyle(2, 0x555555, 0.8);
-      g.lineBetween(lx, ry - 50, lx, ry - 4);
-      g.fillStyle(0xffaa44, 0.4);
-      g.fillCircle(lx, ry - 52, 6);
-      g.fillStyle(0xffcc66, 0.15);
-      g.fillCircle(lx, ry - 52, 20);
+    // ── Station (warm, inviting) ──
+    this.stationX = W * 0.5;
+    const sx = this.stationX;
+    const sw = 140; // station width
+
+    // Warm ground glow under station
+    g.fillStyle(0xffcc66, 0.08);
+    g.fillCircle(sx, ry - 20, sw);
+    g.fillStyle(0xffaa44, 0.05);
+    g.fillCircle(sx, ry - 20, sw * 1.5);
+
+    // Platform (bottom aligns with rail top)
+    g.fillStyle(0x6a5040, 1);
+    g.fillRect(sx - sw/2, ry - 14, sw, 14);
+    g.fillStyle(0x7a6050, 1);
+    g.fillRect(sx - sw/2, ry - 16, sw, 4);
+    // Platform edge highlight
+    g.fillStyle(0xffddaa, 0.15);
+    g.fillRect(sx - sw/2, ry - 16, sw, 2);
+
+    // Roof / canopy (warm wood tone)
+    g.fillStyle(0x5a3820, 0.95);
+    g.fillRect(sx - sw/2 - 12, ry - 58, sw + 24, 10);
+    // Roof underside (warm glow)
+    g.fillStyle(0xffcc88, 0.12);
+    g.fillRect(sx - sw/2 - 8, ry - 48, sw + 16, 44);
+
+    // Roof supports (pillars)
+    g.fillStyle(0x8a7060, 0.9);
+    g.fillRect(sx - sw/2 + 5, ry - 58, 4, 54);
+    g.fillRect(sx + sw/2 - 9, ry - 58, 4, 54);
+
+    // Station sign board with "平溪車站"
+    g.fillStyle(0x2a2018, 1);
+    g.fillRect(sx - 40, ry - 54, 80, 22);
+    g.fillStyle(0x1a1008, 1);
+    g.fillRect(sx - 37, ry - 52, 74, 18);
+    g.lineStyle(1, 0x888060, 0.5);
+    g.strokeRect(sx - 37, ry - 52, 74, 18);
+    this.add.text(sx, ry - 43, '平溪車站', {
+      fontSize: '12px', fontFamily: "'Noto Sans TC', sans-serif",
+      color: '#e8e0d0', letterSpacing: 4,
+    }).setOrigin(0.5).setDepth(6);
+
+    // Hanging lanterns at station
+    for (const lx of [sx - 30, sx + 30]) {
+      g.fillStyle(0xff6622, 0.7);
+      g.fillCircle(lx, ry - 42, 5);
+      g.fillStyle(0xffaa44, 0.2);
+      g.fillCircle(lx, ry - 42, 14);
+    }
+
+    // Bench (warm wood)
+    g.fillStyle(0x8a6848, 0.9);
+    g.fillRect(sx + 15, ry - 18, 24, 7);
+    g.fillRect(sx + 17, ry - 11, 3, 9);
+    g.fillRect(sx + 36, ry - 11, 3, 9);
+
+    // Station lamp posts (warm glow)
+    const stationLamps = [sx - sw/2 - 25, sx + sw/2 + 25];
+    for (const lx of stationLamps) {
+      g.lineStyle(2, 0x887766, 0.9);
+      g.lineBetween(lx, ry - 55, lx, ry - 4);
+      g.fillStyle(0xffcc66, 0.6);
+      g.fillCircle(lx, ry - 57, 7);
+      g.fillStyle(0xffdd88, 0.15);
+      g.fillCircle(lx, ry - 57, 30);
+      g.fillStyle(0xffcc66, 0.06);
+      g.fillCircle(lx, ry - 57, 55);
+    }
+
+    // Regular lamp posts (dimmer)
+    for (const lx of [W * 0.1, W * 0.65, W * 0.85]) {
+      g.lineStyle(2, 0x555555, 0.7);
+      g.lineBetween(lx, ry - 45, lx, ry - 4);
+      g.fillStyle(0xffaa44, 0.3);
+      g.fillCircle(lx, ry - 47, 5);
+      g.fillStyle(0xffcc66, 0.08);
+      g.fillCircle(lx, ry - 47, 18);
     }
     // Ground below tracks
     g.fillStyle(0x1a1510, 1);
@@ -180,7 +247,7 @@ class SkyLanternScene extends Phaser.Scene {
     if ((this.trainDir > 0 && x > W + totalLen) || (this.trainDir < 0 && x < -totalLen)) {
       this.trainActive = false; return;
     }
-    const ry = H * 0.82;
+    const ry = H * 0.92;
     const d = this.trainDir;
     const ec = tt.engine;
 
@@ -208,8 +275,8 @@ class SkyLanternScene extends Phaser.Scene {
       g.fillStyle(sc, tt.stripe ? 0.9 : 0.15);
       g.fillRect(x, ry - 14, 50 * d, tt.stripe ? 3 : 2);
     }
-    // Front light + glow
-    const lightX = x + (d > 0 ? 48 : 2);
+    // Front light + glow (front of engine in travel direction)
+    const lightX = x + (d > 0 ? 48 : -48);
     g.fillStyle(0xffee88, 0.2);
     g.fillCircle(lightX, ry - 14, 12);
     g.fillStyle(0xffee88, 0.8);
@@ -372,17 +439,72 @@ class SkyLanternScene extends Phaser.Scene {
     smoothWindY *= WIND_DECAY;
     moon.update(dt);
 
-    // Train
-    this.nextTrain -= delta;
-    if (this.nextTrain <= 0 && !this.trainActive) {
-      this.nextTrain = Phaser.Math.Between(8000, 18000);
-      this.trainDir = Math.random() > 0.5 ? 1 : -1;
-      this.trainX = this.trainDir > 0 ? -300 : W + 300;
-      this.trainSpeed = TRAIN_TYPES[trainTypeIdx].speed;
-      this.trainActive = true;
+    // Auto-spawn lanterns periodically
+    if (!this.nextAutoLantern) this.nextAutoLantern = Phaser.Math.Between(3000, 6000);
+    this.nextAutoLantern -= delta;
+    if (this.nextAutoLantern <= 0) {
+      this.nextAutoLantern = Phaser.Math.Between(4000, 8000);
+      const lx = Phaser.Math.Between(W * 0.1, W * 0.9);
+      const ly = H * 0.85;
+      const c = Phaser.Utils.Array.GetRandom(LANTERN_COLORS);
+      if (this.lanterns.length < 30) {
+        this.lanterns.push(this.createLantern(lx, ly, c, randomBlessing(), false));
+      }
     }
-    if (this.trainActive) {
+
+    // Train (with station stop)
+    if (!this.trainState) this.trainState = 'waiting'; // waiting, approaching, stopping, stopped, departing, leaving
+    if (!this.trainTimer) this.trainTimer = Phaser.Math.Between(5000, 12000);
+
+    this.trainTimer -= delta;
+
+    if (this.trainState === 'waiting' && this.trainTimer <= 0) {
+      // Spawn train
+      this.trainDir = Math.random() > 0.5 ? 1 : -1;
+      this.trainX = this.trainDir > 0 ? -400 : W + 400;
+      this.trainSpeed = TRAIN_TYPES[trainTypeIdx].speed;
+      this.trainMaxSpeed = this.trainSpeed;
+      this.trainActive = true;
+      this.trainState = 'approaching';
+    }
+
+    if (this.trainState === 'approaching') {
+      // Move toward station, start slowing when near
+      const distToStation = Math.abs(this.trainX - this.stationX);
+      if (distToStation < 200) {
+        this.trainSpeed = Math.max(0.3, this.trainMaxSpeed * (distToStation / 200));
+      }
       this.trainX += this.trainSpeed * this.trainDir;
+      if (distToStation < 15) {
+        this.trainState = 'stopped';
+        this.trainSpeed = 0;
+        this.trainTimer = Phaser.Math.Between(2500, 4500); // dwell time
+      }
+    }
+
+    if (this.trainState === 'stopped') {
+      if (this.trainTimer <= 0) {
+        this.trainState = 'departing';
+      }
+    }
+
+    if (this.trainState === 'departing') {
+      // Accelerate away
+      this.trainSpeed = Math.min(this.trainMaxSpeed, this.trainSpeed + 0.02);
+      this.trainX += this.trainSpeed * this.trainDir;
+      if (this.trainSpeed >= this.trainMaxSpeed * 0.8) {
+        this.trainState = 'leaving';
+      }
+    }
+
+    if (this.trainState === 'leaving') {
+      this.trainX += this.trainMaxSpeed * this.trainDir;
+      const offscreen = this.trainDir > 0 ? this.trainX > W + 500 : this.trainX < -500;
+      if (offscreen) {
+        this.trainActive = false;
+        this.trainState = 'waiting';
+        this.trainTimer = Phaser.Math.Between(6000, 14000);
+      }
     }
     this.drawTrain(this.trainX);
     this.updateSmoke(dt);

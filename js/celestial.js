@@ -138,7 +138,7 @@ class CelestialBody {
       const prog = (t - 6) / 12;
       const p = Math.max(0, Math.min(1, prog));
       this.targetX = W * 0.08 + p * W * 0.84;
-      this.targetY = H * 0.13 - Math.sin(p * Math.PI) * H * 0.09;
+      this.targetY = H * 0.15 - Math.sin(p * Math.PI) * H * 0.06;
       this.targetAlpha = 1;
     } else {
       const prog = ((t < 12 ? t + 24 : t) - 18) / 12;

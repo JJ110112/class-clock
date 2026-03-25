@@ -179,6 +179,36 @@ document.addEventListener('mousemove', (e) => {
   });
 });
 
+// Touch swipe → switch vibe
+let swipeStartX = 0, swipeStartY = 0, swipeStartTime = 0;
+document.addEventListener('touchstart', (e) => {
+  const t = e.touches[0];
+  swipeStartX = t.clientX;
+  swipeStartY = t.clientY;
+  swipeStartTime = performance.now();
+  touchPrevX = t.clientX; touchPrevY = t.clientY; touchPrevTime = performance.now();
+}, { passive: true });
+document.addEventListener('touchend', (e) => {
+  const t = e.changedTouches[0];
+  const dx = t.clientX - swipeStartX;
+  const dy = t.clientY - swipeStartY;
+  const dt = performance.now() - swipeStartTime;
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+  // Horizontal swipe: >60px, mostly horizontal, within 400ms
+  if (absDx > 60 && absDx > absDy * 1.5 && dt < 400) {
+    if (dx < 0) {
+      // Swipe left → next scene
+      currentVibeIndex = (currentVibeIndex + 1) % VIBES.length;
+      loadVibe(currentVibeIndex);
+    } else {
+      // Swipe right → previous scene
+      currentVibeIndex = (currentVibeIndex - 1 + VIBES.length) % VIBES.length;
+      loadVibe(currentVibeIndex);
+    }
+  }
+}, { passive: true });
+
 // Touch wind
 let touchPrevX = 0, touchPrevY = 0, touchPrevTime = 0;
 document.addEventListener('touchmove', (e) => {
@@ -197,10 +227,6 @@ document.addEventListener('touchmove', (e) => {
     windStrength: Math.min(moveSpeed / 800, 1),
     dx, dy, dt,
   });
-}, { passive: true });
-document.addEventListener('touchstart', (e) => {
-  const t = e.touches[0];
-  touchPrevX = t.clientX; touchPrevY = t.clientY; touchPrevTime = performance.now();
 }, { passive: true });
 
 // ══════════════════════════════════

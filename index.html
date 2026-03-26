@@ -7,6 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Noto+Sans+TC:wght@300;400&family=Zen+Antique+Soft&family=Caveat:wght@700&family=Fredoka:wght@600&family=Silkscreen:wght@700&family=Handjet:wght@700&family=Pixelify+Sans:wght@700&family=Press+Start+2P&family=Audiowide&family=Pacifico&family=ZCOOL+XiaoWei&family=Righteous&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/common.css" />
+  <link rel="stylesheet" href="css/menu.css" />
 </head>
 <body>
 
@@ -19,14 +20,104 @@
 <!-- Density hint -->
 <div class="density-hint" id="densityHint"></div>
 
+<!-- ══ Hamburger Button ══ -->
+<button class="hamburger-btn" id="hamburgerBtn">
+  <span></span><span></span><span></span>
+</button>
+
+<!-- ══ Menu Overlay ══ -->
+<div class="menu-overlay" id="menuOverlay"></div>
+
+<!-- ══ Side Menu Panel ══ -->
+<div class="menu-panel" id="menuPanel">
+
+  <!-- 1. Period Settings -->
+  <div class="menu-section">
+    <div class="menu-section-title">上下課時間設定</div>
+    <div class="period-grid" id="periodGrid"></div>
+  </div>
+
+  <!-- 2. Schedule Management -->
+  <div class="menu-section">
+    <div class="menu-section-title">考程管理</div>
+    <div class="schedule-list" id="scheduleList"></div>
+    <button class="btn-new-schedule" id="btnNewSchedule">＋ 新增考程</button>
+  </div>
+
+  <!-- 3. Sound Settings -->
+  <div class="menu-section">
+    <div class="menu-section-title">音效設定</div>
+    <div class="mute-row">
+      <label>狀態轉換提示音</label>
+      <label class="small-toggle">
+        <input type="checkbox" id="muteToggle" />
+        <div class="st-track"></div>
+        <div class="st-thumb"></div>
+      </label>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ Schedule Editor Modal ══ -->
+<div class="editor-overlay" id="editorOverlay">
+  <div class="editor-modal">
+    <div class="editor-header">
+      <span class="editor-title">考程編輯</span>
+      <button class="editor-close" id="editorClose">✕</button>
+    </div>
+
+    <!-- Basic info -->
+    <div class="editor-row">
+      <div class="editor-field">
+        <label>考程名稱</label>
+        <input type="text" id="editorName" placeholder="例：第一次期中考" />
+      </div>
+      <div class="editor-field">
+        <label>類型</label>
+        <select id="editorType">
+          <option value="monthly">月考</option>
+          <option value="mock">模擬考</option>
+        </select>
+      </div>
+      <div class="editor-field">
+        <label>第一天日期</label>
+        <input type="date" id="editorDate" />
+      </div>
+    </div>
+
+    <!-- Day tabs -->
+    <div class="day-tabs" id="dayTabs"></div>
+
+    <!-- Drag palette -->
+    <div class="drag-palette">
+      <div class="drag-block" draggable="true" data-duration="50">50 分鐘</div>
+      <div class="drag-block" draggable="true" data-duration="80">80 分鐘</div>
+      <div class="drag-block" draggable="true" data-duration="100">100 分鐘</div>
+    </div>
+
+    <!-- Schedule grid -->
+    <div class="schedule-grid" id="scheduleGrid"></div>
+
+    <!-- Early submit settings -->
+    <div id="earlySubmitSection">
+      <div class="menu-section-title" style="margin-bottom:8px">提早交卷設定</div>
+      <div class="early-submit-grid" id="earlySubmitGrid"></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="editor-actions">
+      <button class="btn-cancel" id="btnCancelEditor">取消</button>
+      <button class="btn-save" id="btnSaveEditor">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Main Content ══ -->
 <div class="container">
 
-  <!-- MODE SWITCHER -->
-  <div class="mode-switcher">
-    <button class="mode-btn active" data-mode="monthly" id="btnMonthly">月　考</button>
-    <div class="mode-divider"></div>
-    <button class="mode-btn" data-mode="mock" id="btnMock">模擬考</button>
-  </div>
+  <!-- Exam Selector Bar -->
+  <div class="exam-selector" id="examSelector"></div>
 
   <div class="date-line" id="dateLine"></div>
 
@@ -41,92 +132,30 @@
   <div class="weekday" id="weekday"></div>
   <div class="divider"></div>
 
-  <!-- ══ 月考 PANEL ══ -->
-  <div class="exam-panel" id="panelMonthly">
-    <div class="exam-header">
-      <div class="exam-title">考試剩餘時間</div>
-      <label class="toggle-wrap">
-        <div class="toggle">
-          <input type="checkbox" id="examToggle" />
-          <div class="toggle-track"></div>
-          <div class="toggle-thumb"></div>
-        </div>
-        開啟
-      </label>
+  <!-- Status Bar -->
+  <div class="status-bar" id="statusBar">
+    <div class="status-text" id="statusText"></div>
+    <div class="status-countdown" id="statusCountdown" style="display:none">
+      <span class="scd" id="scd0">-</span><span class="scd" id="scd1">-</span>
+      <span class="scd-colon">:</span>
+      <span class="scd" id="scd2">-</span><span class="scd" id="scd3">-</span>
     </div>
-
-    <div id="examControls" style="display:none; flex-direction:column; gap:12px;">
-      <div class="period-row">
-        <span class="period-label">考試時長：</span>
-        <div class="period-btns" id="durationBtns"></div>
-      </div>
-      <div class="countdown-box monthly-box" id="countdownBox">
-        <div class="countdown-label" id="countdownLabel">第 1 節剩餘</div>
-        <div class="countdown-time" id="countdownTime">
-          <span class="cd" id="cd0">-</span><span class="cd" id="cd1">-</span>
-          <span class="cd-colon">:</span>
-          <span class="cd" id="cd2">-</span><span class="cd" id="cd3">-</span>
-        </div>
-        <div class="break-msg" id="breakMsg" style="display:none;"></div>
-        <div class="countdown-bar-wrap"><div class="countdown-bar" id="countdownBar" style="width:100%"></div></div>
-        <div class="period-info" id="periodInfo"></div>
-      </div>
-    </div>
-
-    <div class="status-off" id="statusOff">開啟開關以顯示考試剩餘時間</div>
-  </div>
-
-  <!-- ══ 模擬考 PANEL ══ -->
-  <div class="exam-panel" id="panelMock" style="display:none;">
-    <div class="exam-header">
-      <div class="exam-title mock">模擬考剩餘時間</div>
-      <label class="toggle-wrap">
-        <div class="toggle">
-          <input type="checkbox" id="mockToggle" />
-          <div class="toggle-track"></div>
-          <div class="toggle-thumb"></div>
-        </div>
-        開啟
-      </label>
-    </div>
-
-    <!-- 天次選擇 -->
-    <div class="period-row" id="mockDayRow">
-      <span class="period-label">考試天次：</span>
-      <div class="period-btns">
-        <button class="pb active-purple" id="btnDay1">第一天</button>
-        <button class="pb" id="btnDay2">第二天</button>
-      </div>
-    </div>
-
-    <!-- 科目 badge -->
-    <div class="subject-badge" id="subjectBadge">
-      <div class="subject-dot"></div>
-      <span id="subjectName">—</span>
-    </div>
-
-    <div class="countdown-box mock-box" id="mockCountdownBox">
-      <div class="countdown-label" id="mockLabel">剩餘時間</div>
-      <div class="countdown-time" id="mockTime">
-        <span class="cd" id="mcd0">-</span><span class="cd" id="mcd1">-</span>
-        <span class="cd-colon">:</span>
-        <span class="cd" id="mcd2">-</span><span class="cd" id="mcd3">-</span>
-      </div>
-      <div class="break-msg" id="mockBreakMsg" style="display:none;"></div>
-      <div class="countdown-bar-wrap"><div class="countdown-bar" id="mockBar" style="width:100%"></div></div>
-      <div class="period-info" id="mockInfo"></div>
-    </div>
-
-    <div class="status-off" id="mockStatusOff">開啟開關以顯示模擬考剩餘時間</div>
+    <div class="status-progress"><div class="status-progress-bar" id="statusProgressBar" style="width:100%"></div></div>
+    <div class="status-info" id="statusInfo"></div>
   </div>
 
 </div>
 
 <script src="js/clock.js"></script>
-<script src="js/exam.js"></script>
+<script src="js/exam-data.js"></script>
+<script src="js/exam-engine.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/exam-ui.js"></script>
+<script src="js/menu.js"></script>
 <script src="js/vibe-manager.js"></script>
 <script>
-  initExam();
+  MenuModule.init();
+  ExamUI.init();
   ClockModule.start();
 </script>
 </body>

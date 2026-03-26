@@ -187,6 +187,19 @@ const ExamData = (() => {
     });
   }
 
+  // ── Overlap check ──
+  function checkSlotOverlap(periods, slots, toPeriod, duration, excludePeriod) {
+    const toStart = timeToSec(periods[toPeriod - 1].start[0], periods[toPeriod - 1].start[1]);
+    const toEnd = toStart + duration * 60;
+    for (const slot of slots) {
+      if (slot.period === excludePeriod) continue;
+      const sStart = timeToSec(periods[slot.period - 1].start[0], periods[slot.period - 1].start[1]);
+      const sEnd = sStart + slot.duration * 60;
+      if (toStart < sEnd && toEnd > sStart) return slot;
+    }
+    return null;
+  }
+
   // ── Mute setting ──
   function isMuted() {
     const val = localStorage.getItem(STORAGE_KEY_MUTE);
@@ -220,6 +233,7 @@ const ExamData = (() => {
     getActiveSchedule,
     findScheduleForDate,
     getDaySlots,
+    checkSlotOverlap,
     isMuted,
     setMuted,
   };

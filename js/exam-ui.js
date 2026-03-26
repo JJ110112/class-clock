@@ -1,36 +1,9 @@
 /* ══════════════════════════════════
-   Exam UI – Selector & Status Bar
+   Exam UI – Status Bar
    ══════════════════════════════════ */
 
 const ExamUI = (() => {
   let prevStatus = null;
-
-  // ── Render exam selector buttons ──
-  function renderSelector() {
-    const container = document.getElementById('examSelector');
-    container.innerHTML = '';
-
-    const schedules = ExamData.loadAllSchedules();
-    const activeId = ExamData.getActiveScheduleId();
-
-    schedules.forEach(s => {
-      const btn = document.createElement('button');
-      btn.className = 'exam-sel-btn' +
-        (s.id === activeId ? ' active' : '') +
-        (s.type === 'mock' ? ' mock' : '');
-      btn.textContent = s.name;
-      btn.addEventListener('click', () => {
-        if (ExamData.getActiveScheduleId() === s.id) {
-          ExamData.setActiveScheduleId(null);
-        } else {
-          ExamData.setActiveScheduleId(s.id);
-        }
-        renderSelector();
-        updateStatus(new Date());
-      });
-      container.appendChild(btn);
-    });
-  }
 
   // ── Auto-activate schedule matching today ──
   function autoActivate() {
@@ -38,7 +11,6 @@ const ExamUI = (() => {
     const result = ExamData.findScheduleForDate(today);
     if (result) {
       ExamData.setActiveScheduleId(result.schedule.id);
-      renderSelector();
     }
   }
 
@@ -50,18 +22,25 @@ const ExamUI = (() => {
     const statusProgress = document.getElementById('statusProgressBar');
     const statusInfo = document.getElementById('statusInfo');
 
+    const muteEl = document.getElementById('muteIndicator');
     const schedule = ExamData.getActiveSchedule();
     if (!schedule) {
-      statusBar.classList.remove('visible', 'urgent');
+      statusBar.classList.remove('visible', 'urgent', 'exam-active');
+      document.querySelector('.container').classList.remove('exam-active');
       prevStatus = null;
       return;
     }
+    // Update mute indicator
+    const muted = ExamData.isMuted();
+    muteEl.textContent = muted ? '\uD83D\uDD07' : '\uD83D\uDD0A';
+    muteEl.classList.toggle('unmuted', !muted);
 
     const todayStr = ExamData.toDateStr(now);
     const dayIndex = ExamEngine.getTodayDayIndex(schedule, todayStr);
 
     if (dayIndex === -1) {
-      statusBar.classList.remove('visible', 'urgent');
+      statusBar.classList.remove('visible', 'urgent', 'exam-active');
+      document.querySelector('.container').classList.remove('exam-active');
       prevStatus = null;
       return;
     }
@@ -85,8 +64,18 @@ const ExamUI = (() => {
     const isUrgent = status.status === ExamEngine.STATUS.LAST_5_MIN;
     statusBar.classList.toggle('urgent', isUrgent);
 
+    const isActive = [
+      ExamEngine.STATUS.EXAM_ACTIVE,
+      ExamEngine.STATUS.EARLY_SUBMIT,
+      ExamEngine.STATUS.LAST_5_MIN,
+      ExamEngine.STATUS.STUDY,
+    ].includes(status.status);
+    statusBar.classList.toggle('exam-active', isActive);
+    document.querySelector('.container').classList.toggle('exam-active', isActive);
+
     if (status.status === ExamEngine.STATUS.IDLE) {
       statusBar.classList.remove('visible');
+      document.querySelector('.container').classList.remove('exam-active');
       return;
     }
 
@@ -112,7 +101,7 @@ const ExamUI = (() => {
     }
 
     // Active exam states — show countdown
-    statusCountdown.style.display = 'flex';
+    statusCountdown.style.display = 'inline-flex';
     const mm = String(Math.floor(status.remainSec / 60)).padStart(2, '0');
     const ss = String(status.remainSec % 60).padStart(2, '0');
     document.getElementById('scd0').textContent = mm[0];
@@ -120,13 +109,22 @@ const ExamUI = (() => {
     document.getElementById('scd2').textContent = ss[0];
     document.getElementById('scd3').textContent = ss[1];
 
+    // Auto-scale countdown to fit within status bar
+    const parentW = statusCountdown.parentElement.clientWidth - 40;
+    const countdownW = statusCountdown.scrollWidth;
+    if (countdownW > parentW && parentW > 0) {
+      statusCountdown.style.transform = `scale(${parentW / countdownW})`;
+    } else {
+      statusCountdown.style.transform = '';
+    }
+
     // Status label
     switch (status.status) {
       case ExamEngine.STATUS.EXAM_ACTIVE:
-        statusText.textContent = `考試中 — ${status.slot.label}`;
+        statusText.textContent = `考試中 — ${status.slot.label} 剩餘`;
         break;
       case ExamEngine.STATUS.EARLY_SUBMIT:
-        statusText.textContent = `可提早交卷 — ${status.slot.label}`;
+        statusText.textContent = `可提早交卷 — ${status.slot.label} 剩餘`;
         break;
       case ExamEngine.STATUS.LAST_5_MIN:
         statusText.textContent = '交卷倒數';
@@ -157,10 +155,13 @@ const ExamUI = (() => {
 
   // ── Init ──
   function init() {
-    renderSelector();
     autoActivate();
     ClockModule.onTick.push(updateStatus);
+    document.getElementById('muteIndicator').addEventListener('click', () => {
+      ExamData.setMuted(!ExamData.isMuted());
+      updateStatus(new Date());
+    });
   }
 
-  return { init, renderSelector, updateStatus };
+  return { init, updateStatus };
 })();

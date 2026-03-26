@@ -101,7 +101,7 @@ const ExamEngine = (() => {
         status: STATUS.BEFORE_EXAM,
         nextSlot: sorted[0],
         remainSec: sorted[0].startSec - nowSec,
-        message: `下課中 — 下一節 ${sorted[0].label} ${formatTime(sorted[0].startSec)} 開始`,
+        message: `下一節課 ${formatTime(sorted[0].startSec)} 開始，還有 ${formatRemain(sorted[0].startSec - nowSec)}`,
       };
     }
 
@@ -127,7 +127,7 @@ const ExamEngine = (() => {
           status: STATUS.BREAK,
           nextSlot: sorted[i],
           remainSec: sorted[i].startSec - nowSec,
-          message: `考試結束 — 下課中　下一節 ${sorted[i].label} ${formatTime(sorted[i].startSec)} 開始`,
+          message: `下一節課 ${formatTime(sorted[i].startSec)} 開始，還有 ${formatRemain(sorted[i].startSec - nowSec)}`,
         };
       }
     }
@@ -162,6 +162,11 @@ const ExamEngine = (() => {
     const mm = String(Math.floor(remainSec / 60)).padStart(2, '0');
     const ss = String(remainSec % 60).padStart(2, '0');
     return `${prefix} ${mm}:${ss}`;
+  }
+
+  function formatRemain(sec) {
+    if (sec < 60) return `${sec} 秒`;
+    return `${Math.ceil(sec / 60)} 分鐘`;
   }
 
   function formatTime(sec) {

@@ -68,9 +68,14 @@ const MenuModule = (() => {
     const activeId = ExamData.getActiveScheduleId();
 
     schedules.forEach(s => {
+      const isActive = s.id === activeId;
       const item = document.createElement('div');
-      item.className = 'schedule-item';
+      item.className = 'schedule-item' + (isActive ? ' active' : '');
       item.innerHTML = `
+        <label class="sched-check">
+          <input type="checkbox" ${isActive ? 'checked' : ''} />
+          <span class="sched-checkmark"></span>
+        </label>
         <span class="sched-name">${s.name}</span>
         <span class="sched-type ${s.type}">${s.type === 'monthly' ? '月考' : '模擬'}</span>
         <div class="sched-actions">
@@ -78,6 +83,17 @@ const MenuModule = (() => {
           <button class="del" title="刪除">✕</button>
         </div>
       `;
+      // Toggle active on checkbox
+      item.querySelector('.sched-check input').addEventListener('change', (e) => {
+        e.stopPropagation();
+        if (e.target.checked) {
+          ExamData.setActiveScheduleId(s.id);
+        } else {
+          ExamData.setActiveScheduleId(null);
+        }
+        renderScheduleList();
+        ExamUI.updateStatus(new Date());
+      });
       item.querySelector('.edit').addEventListener('click', (e) => {
         e.stopPropagation();
         openEditor(s.id);
@@ -87,21 +103,12 @@ const MenuModule = (() => {
         if (confirm(`確定刪除「${s.name}」？`)) {
           ExamData.deleteSchedule(s.id);
           renderScheduleList();
-          ExamUI.renderSelector();
         }
       });
       list.appendChild(item);
     });
   }
 
-  // ── Mute toggle ──
-  function renderMuteToggle() {
-    const input = document.getElementById('muteToggle');
-    input.checked = !ExamData.isMuted();
-    input.addEventListener('change', () => {
-      ExamData.setMuted(!input.checked);
-    });
-  }
 
   // ══════════════════════════════════
   //  Schedule Editor
@@ -299,6 +306,11 @@ const MenuModule = (() => {
     return block;
   }
 
+  function checkOverlap(daySlots, toPeriod, duration, excludePeriod) {
+    const settings = ExamData.loadPeriodSettings();
+    return ExamData.checkSlotOverlap(settings.periods, daySlots, toPeriod, duration, excludePeriod);
+  }
+
   function handleDrop(toPeriod, e) {
     let data;
     try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch { return; }
@@ -310,6 +322,13 @@ const MenuModule = (() => {
       // New block from palette
       const existing = daySlots.find(s => s.period === toPeriod);
       if (existing) return; // Slot already occupied
+
+      // Check time overlap
+      const overlap = checkOverlap(daySlots, toPeriod, data.duration, null);
+      if (overlap) {
+        alert(`時間衝突：${data.duration} 分鐘的區塊會與第 ${overlap.period} 節重疊`);
+        return;
+      }
 
       const settings = ExamData.loadPeriodSettings();
       const period = settings.periods[toPeriod - 1];
@@ -335,13 +354,20 @@ const MenuModule = (() => {
       if (existing) return;
 
       const slot = daySlots.find(s => s.period === fromPeriod);
-      if (slot) {
-        slot.period = toPeriod;
-        if (isMock) {
-          const settings = ExamData.loadPeriodSettings();
-          const period = settings.periods[toPeriod - 1];
-          slot.start = [...period.start];
-        }
+      if (!slot) return;
+
+      // Check time overlap (exclude the block being moved)
+      const overlap = checkOverlap(daySlots, toPeriod, slot.duration, fromPeriod);
+      if (overlap) {
+        alert(`時間衝突：移動後會與第 ${overlap.period} 節重疊`);
+        return;
+      }
+
+      slot.period = toPeriod;
+      if (isMock) {
+        const settings = ExamData.loadPeriodSettings();
+        const period = settings.periods[toPeriod - 1];
+        slot.start = [...period.start];
       }
     }
 
@@ -489,7 +515,6 @@ const MenuModule = (() => {
 
     renderPeriodSettings();
     renderScheduleList();
-    renderMuteToggle();
   }
 
   return { init, close, openEditor, renderScheduleList };

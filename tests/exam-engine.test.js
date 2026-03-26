@@ -52,6 +52,7 @@ describe('computeStatus', () => {
     expect(result.status).toBe(STATUS.BEFORE_EXAM);
     expect(result.nextSlot.label).toBe('第1節');
     expect(result.message).toContain('08:10');
+    expect(result.message).toContain('下一節課');
   });
 
   it('returns EXAM_ACTIVE during exam', () => {
@@ -90,6 +91,7 @@ describe('computeStatus', () => {
     expect(result.status).toBe(STATUS.BREAK);
     expect(result.nextSlot.label).toBe('第2節');
     expect(result.message).toContain('09:10');
+    expect(result.message).toContain('下一節課');
   });
 
   it('returns SCHOOL_OVER after all exams', () => {

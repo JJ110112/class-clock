@@ -208,6 +208,55 @@ describe('getDaySlots', () => {
   });
 });
 
+describe('checkSlotOverlap', () => {
+  const periods = ExamData.DEFAULT_PERIODS;
+
+  it('detects overlap: 100min at period 1 conflicts with period 2', () => {
+    const slots = [{ period: 1, duration: 100 }];
+    // Try placing 50min at period 2 — period 1 runs 8:10~9:50, period 2 starts 9:10
+    const overlap = ExamData.checkSlotOverlap(periods, slots, 2, 50, null);
+    expect(overlap).not.toBeNull();
+    expect(overlap.period).toBe(1);
+  });
+
+  it('detects overlap: 80min at period 2 conflicts with period 1 100min', () => {
+    const slots = [{ period: 2, duration: 80 }];
+    // Period 2: 9:10~10:30. Try 100min at period 1: 8:10~9:50 → overlaps
+    const overlap = ExamData.checkSlotOverlap(periods, slots, 1, 100, null);
+    expect(overlap).not.toBeNull();
+    expect(overlap.period).toBe(2);
+  });
+
+  it('allows non-overlapping slots', () => {
+    const slots = [{ period: 1, duration: 50 }];
+    // Period 1: 8:10~9:00. Period 2 starts 9:10 → no overlap
+    const overlap = ExamData.checkSlotOverlap(periods, slots, 2, 50, null);
+    expect(overlap).toBeNull();
+  });
+
+  it('allows 50min at period 1 and 50min at period 2 (no overlap)', () => {
+    const slots = [{ period: 1, duration: 50 }];
+    const overlap = ExamData.checkSlotOverlap(periods, slots, 2, 80, null);
+    expect(overlap).toBeNull();
+  });
+
+  it('excludes the moving slot from overlap check', () => {
+    const slots = [{ period: 1, duration: 100 }, { period: 3, duration: 50 }];
+    // Move period 1 to period 2: exclude period 1 from check
+    const overlap = ExamData.checkSlotOverlap(periods, slots, 2, 100, 1);
+    // Period 2 100min = 9:10~10:50, period 3 starts 10:10 → overlap with period 3
+    expect(overlap).not.toBeNull();
+    expect(overlap.period).toBe(3);
+  });
+
+  it('no overlap when moving to a gap', () => {
+    const slots = [{ period: 1, duration: 50 }, { period: 5, duration: 50 }];
+    // Move period 1 to period 3: 10:10~11:00, no conflict
+    const overlap = ExamData.checkSlotOverlap(periods, slots, 3, 50, 1);
+    expect(overlap).toBeNull();
+  });
+});
+
 describe('Mute setting', () => {
   it('defaults to muted', () => {
     expect(ExamData.isMuted()).toBe(true);

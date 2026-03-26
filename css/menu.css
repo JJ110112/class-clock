@@ -141,7 +141,39 @@
   color: var(--dim);
 }
 .schedule-item:hover { border-color: var(--accent); color: var(--text); }
+.schedule-item.active { border-color: var(--accent); color: var(--accent); }
 .schedule-item .sched-name { flex: 1; }
+
+/* checkbox */
+.sched-check {
+  position: relative;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.sched-check input { display: none; }
+.sched-checkmark {
+  width: 18px; height: 18px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sched-check input:checked ~ .sched-checkmark {
+  border-color: var(--accent);
+  background: rgba(255,183,197,0.15);
+}
+.sched-check input:checked ~ .sched-checkmark::after {
+  content: '';
+  width: 10px; height: 6px;
+  border-left: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  transform: rotate(-45deg);
+  margin-bottom: 2px;
+}
 .schedule-item .sched-type {
   font-size: 0.7rem;
   padding: 2px 6px;
@@ -273,6 +305,11 @@
 .editor-field label {
   font-size: 0.82rem;
   color: var(--dim);
+}
+.editor-field input[type="date"]::-webkit-calendar-picker-indicator,
+.period-grid input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
 }
 .editor-field input[type="text"],
 .editor-field input[type="date"],
@@ -494,48 +531,9 @@
 }
 .btn-cancel:hover { border-color: var(--dim); color: var(--text); }
 
-/* ══════════════════════════════════
-   Exam Selector Bar & Status
-   ══════════════════════════════════ */
-.exam-selector {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  padding: 2px 0;
-}
-.exam-selector::-webkit-scrollbar { display: none; }
-
-.exam-sel-btn {
-  font-family: 'Noto Sans TC', sans-serif;
-  font-size: clamp(0.7rem, 1.8vw, 0.82rem);
-  padding: 7px 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--dim);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.25s;
-  flex-shrink: 0;
-}
-.exam-sel-btn:hover { border-color: var(--accent); color: var(--accent); }
-.exam-sel-btn.active {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(255,183,197,0.08);
-  text-shadow: 0 0 10px rgba(255,183,197,0.4);
-}
-.exam-sel-btn.active.mock {
-  border-color: var(--purple);
-  color: var(--purple);
-  background: rgba(167,139,250,0.08);
-  text-shadow: 0 0 10px rgba(167,139,250,0.4);
-}
-
 /* ── Status bar ── */
 .status-bar {
+  position: relative;
   width: 100%;
   display: none;
   flex-direction: column;
@@ -543,36 +541,39 @@
   gap: 8px;
   padding: 16px 20px;
   border-radius: 12px;
-  background: color-mix(in srgb, var(--panel) 65%, transparent);
+  background: color-mix(in srgb, var(--panel) 40%, transparent);
   backdrop-filter: blur(8px);
   border: 1px solid var(--border);
+  overflow: hidden;
 }
 .status-bar.visible { display: flex; }
 
 .status-text {
-  font-family: 'Noto Sans TC', sans-serif;
-  font-size: clamp(0.85rem, 2.5vw, 1.1rem);
+  font-family: var(--font-clock);
+  font-size: clamp(0.75rem, 2vw, 0.95rem);
   color: var(--text);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-align: center;
 }
 
 .status-countdown {
-  font-family: 'Orbitron', monospace;
+  font-family: var(--font-clock);
   font-weight: 900;
   font-size: clamp(2.5rem, 12vw, 6rem);
   line-height: 1;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  max-width: 100%;
+  transform-origin: center;
 }
 .status-countdown .scd {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 0.8em;
+  min-width: 0.8em;
 }
 .status-countdown .scd-colon {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 0.5em; padding-bottom: 0.1em;
+  min-width: 0.4em; padding-bottom: 0.1em;
 }
 .status-countdown .scd, .status-countdown .scd-colon {
   color: var(--accent2);
@@ -585,6 +586,18 @@
   text-shadow: 0 0 20px rgba(255,59,59,0.6) !important;
 }
 .status-bar.urgent .status-countdown { animation: pulse 0.5s ease-in-out infinite alternate; }
+
+/* Enlarged status when exam/study active */
+.status-bar.exam-active { padding: 20px 24px; }
+.status-bar.exam-active .status-text {
+  font-size: clamp(1rem, 3vw, 1.4rem);
+}
+.status-bar.exam-active .status-countdown {
+  font-size: clamp(4.5rem, 20vw, 12rem);
+}
+.status-bar.exam-active .status-info {
+  font-size: clamp(0.85rem, 2.2vw, 1.1rem);
+}
 
 .status-progress {
   width: 100%;

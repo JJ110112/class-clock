@@ -189,7 +189,7 @@ document.addEventListener('touchstart', (e) => {
   swipeStartTime = performance.now();
   touchPrevX = t.clientX; touchPrevY = t.clientY; touchPrevTime = performance.now();
   // Block swipe if touching menu, editor, or interactive elements
-  swipeBlocked = !!(e.target.closest('.menu-panel, .hamburger-btn, .editor-overlay, .exam-selector, .status-bar, button, input, select, label'));
+  swipeBlocked = !!(e.target.closest('.menu-panel, .hamburger-btn, .editor-overlay, .status-bar, button, input, select, label'));
 }, { passive: true });
 document.addEventListener('touchend', (e) => {
   if (swipeBlocked) return;
@@ -238,7 +238,7 @@ document.addEventListener('touchmove', (e) => {
 // ══════════════════════════════════
 document.addEventListener('wheel', (e) => {
   // Skip if over interactive elements
-  if (e.target.closest('button, label, input, select, .exam-panel, .mode-switcher, .toggle-wrap, .menu-panel, .hamburger-btn, .editor-overlay, .exam-selector, .status-bar')) return;
+  if (e.target.closest('button, label, input, select, .exam-panel, .mode-switcher, .toggle-wrap, .menu-panel, .hamburger-btn, .editor-overlay, .status-bar')) return;
   e.preventDefault();
   const dir = e.deltaY > 0 ? 1 : -1;
   sendToVibe({ type: 'density', dir });
@@ -246,7 +246,7 @@ document.addEventListener('wheel', (e) => {
 
 // Click on non-interactive area → send to vibe (vibe decides what to do)
 document.addEventListener('click', (e) => {
-  if (e.target.closest('button, label, input, select, a, .exam-panel, .mode-switcher, .toggle-wrap, .vibe-nav, .menu-panel, .hamburger-btn, .editor-overlay, .exam-selector, .status-bar')) return;
+  if (e.target.closest('button, label, input, select, a, .exam-panel, .mode-switcher, .toggle-wrap, .vibe-nav, .menu-panel, .hamburger-btn, .editor-overlay, .status-bar')) return;
   sendToVibe({ type: 'click', x: e.clientX, y: e.clientY });
 });
 

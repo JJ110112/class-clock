@@ -64,6 +64,23 @@ body {
 }
 .vibe-hint.show { opacity: 0.85; }
 
+/* ── Mute indicator (inside status bar) ── */
+.mute-indicator {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: clamp(0.75rem, 1.6vw, 0.9rem);
+  color: var(--dim);
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity 0.3s;
+}
+.mute-indicator.unmuted {
+  color: var(--accent);
+  opacity: 0.8;
+  text-shadow: 0 0 8px var(--accent);
+}
+
 /* ── Density hint ── */
 .density-hint {
   position: fixed;
@@ -145,6 +162,33 @@ body {
 }
 
 @keyframes pulse { to { opacity: 0.55; } }
+
+/* ── Exam active: shrink clock, enlarge status ── */
+.container.exam-active .digital {
+  gap: 0.2vw;
+}
+.container.exam-active .d {
+  width: clamp(1.2rem, 5vw, 3rem);
+  height: clamp(1.5rem, 6.5vw, 4rem);
+  font-size: clamp(1rem, 4.5vw, 2.8rem);
+}
+.container.exam-active .colon {
+  width: clamp(0.4rem, 1.5vw, 1rem);
+  height: clamp(1.5rem, 6.5vw, 4rem);
+  font-size: clamp(0.8rem, 3vw, 2rem);
+}
+.container.exam-active .date-line {
+  font-size: clamp(0.45rem, 1vw, 0.6rem);
+}
+.container.exam-active .weekday {
+  font-size: clamp(0.45rem, 1.2vw, 0.6rem);
+}
+.container.exam-active .d,
+.container.exam-active .colon,
+.container.exam-active .date-line,
+.container.exam-active .weekday {
+  transition: all 0.4s ease;
+}
 
 /* ── Light theme override (for daytime vibes) ── */
 body.light-theme {

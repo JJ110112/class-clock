@@ -288,7 +288,7 @@ const MenuModule = (() => {
     // Click to edit subject (mock only)
     if (isMock) {
       block.addEventListener('dblclick', () => {
-        const name = prompt('科目名稱：', slot.subject || '');
+        const name = prompt('請輸入科目名稱（例：國文、英文、數學、專業科目一）：', slot.subject || '');
         if (name !== null) {
           slot.subject = name;
           renderScheduleGrid();
@@ -316,7 +316,11 @@ const MenuModule = (() => {
 
       const newSlot = { period: toPeriod, duration: data.duration, isStudy: !!data.isStudy };
       if (isMock) {
-        newSlot.subject = data.isStudy ? '自習' : '';
+        let subject = data.isStudy ? '自習' : '';
+        if (!data.isStudy) {
+          subject = prompt('請輸入科目名稱（例：國文、英文、數學、專業科目一）：', '') || '';
+        }
+        newSlot.subject = subject;
         newSlot.start = [...period.start];
         newSlot.earlySubmit = 0;
       }

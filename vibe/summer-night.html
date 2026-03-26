@@ -3,7 +3,7 @@
 <meta charset="UTF-8">
 <style>
   * { margin:0; padding:0; }
-  body { overflow:hidden; background:#050a07; cursor:default; }
+  body { overflow:hidden; background: url('../img/Fireflies in forest.jpg') center/cover no-repeat; cursor:default; }
   canvas { display:block; }
 </style>
 </head>
@@ -99,15 +99,8 @@ function animate() {
   smoothWindX *= WIND_DECAY;
   smoothWindY *= WIND_DECAY;
 
-  // Background
-  ctx.fillStyle = '#050a07';
-  ctx.fillRect(0, 0, W, H);
-  // Subtle gradient
-  const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, 'rgba(5,10,7,1)');
-  grad.addColorStop(1, 'rgba(10,26,14,1)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
+  // Clear canvas (transparent, photo shows through)
+  ctx.clearRect(0, 0, W, H);
 
   // Celestial (moon)
   celestial.update(dt);

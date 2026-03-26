@@ -3,7 +3,7 @@
 <meta charset="UTF-8">
 <style>
   * { margin:0; padding:0; }
-  body { overflow:hidden; background:#020818; cursor:default; }
+  body { overflow:hidden; background: url('../img/taipei101.jpg') center/cover no-repeat #020818; cursor:default; }
   canvas { display:block; }
 </style>
 </head>
@@ -606,31 +606,13 @@ function animate() {
   smoothWindX *= WIND_DECAY;
   smoothWindY *= WIND_DECAY;
 
-  // Sky
-  const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, '#020818');
-  grad.addColorStop(0.6, '#0a1228');
-  grad.addColorStop(1, '#0a0e18');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
-
-  // Stars
-  stars.forEach(s => {
-    s.phase += s.speed;
-    ctx.globalAlpha = (Math.sin(s.phase) + 1) / 2 * 0.6 + 0.2;
-    ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
-  });
-  ctx.globalAlpha = 1;
+  // Clear canvas (photo shows through)
+  ctx.clearRect(0, 0, W, H);
 
   moon.update(dt);
 
   // Drone show
   drawDrones(elapsed, dt);
-
-  // Skyline + 101
-  drawSkyline(elapsed, dt);
-  drawBuilding(elapsed);
 
   // Auto fireworks from 101
   nextAutoFW -= dt * 1000;

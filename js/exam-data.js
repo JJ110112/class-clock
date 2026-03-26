@@ -167,6 +167,7 @@ const ExamData = (() => {
           duration: slot.duration,
           endSec: timeToSec(period.start[0], period.start[1]) + slot.duration * 60,
           earlySubmitMin: earlyMin,
+          isStudy: !!slot.isStudy,
         };
       }).filter(Boolean);
     }
@@ -181,6 +182,7 @@ const ExamData = (() => {
         duration: slot.duration,
         endSec: startSec + slot.duration * 60,
         earlySubmitMin: slot.earlySubmit || 0,
+        isStudy: !!slot.isStudy,
       };
     });
   }

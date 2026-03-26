@@ -128,6 +128,47 @@ describe('computeStatus', () => {
   });
 });
 
+describe('study slots', () => {
+  it('returns STUDY status during self-study period', () => {
+    const slot = makeSlot('第3節', 10, 10, 50, 15);
+    slot.isStudy = true;
+    const nowSec = 10 * 3600 + 20 * 60; // 10:20
+    const result = computeStatus([slot], nowSec, 16 * 3600);
+    expect(result.status).toBe(STATUS.STUDY);
+    expect(result.remainSec).toBe(40 * 60);
+    expect(result.message).toContain('自習中');
+  });
+
+  it('STUDY ignores early submit and last 5 min', () => {
+    const slot = makeSlot('第3節', 10, 10, 50, 15);
+    slot.isStudy = true;
+    // 3 min before end — normally would be LAST_5_MIN
+    const nowSec = 10 * 3600 + 10 * 60 + 47 * 60; // 10:57
+    const result = computeStatus([slot], nowSec, 16 * 3600);
+    expect(result.status).toBe(STATUS.STUDY);
+    expect(result.message).toContain('自習中');
+  });
+
+  it('mixed exam and study slots work correctly', () => {
+    const examSlot = makeSlot('第1節', 8, 10, 50, 15);
+    const studySlot = makeSlot('第2節', 9, 10, 50, 15);
+    studySlot.isStudy = true;
+    const examSlot2 = makeSlot('第3節', 10, 10, 80, 15);
+
+    // During exam
+    let r = computeStatus([examSlot, studySlot, examSlot2], 8 * 3600 + 20 * 60, 16 * 3600);
+    expect(r.status).toBe(STATUS.EXAM_ACTIVE);
+
+    // During study
+    r = computeStatus([examSlot, studySlot, examSlot2], 9 * 3600 + 20 * 60, 16 * 3600);
+    expect(r.status).toBe(STATUS.STUDY);
+
+    // During next exam
+    r = computeStatus([examSlot, studySlot, examSlot2], 10 * 3600 + 20 * 60, 16 * 3600);
+    expect(r.status).toBe(STATUS.EXAM_ACTIVE);
+  });
+});
+
 describe('getTodayDayIndex', () => {
   it('returns day index when date matches', () => {
     const schedule = { dates: ['2026-03-27', '2026-03-28'] };

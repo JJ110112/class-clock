@@ -131,6 +131,9 @@ const ExamUI = (() => {
       case ExamEngine.STATUS.LAST_5_MIN:
         statusText.textContent = '交卷倒數';
         break;
+      case ExamEngine.STATUS.STUDY:
+        statusText.textContent = `自習中 — ${status.slot.label}`;
+        break;
     }
 
     // Progress bar (remaining %)

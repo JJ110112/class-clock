@@ -13,6 +13,7 @@ const ExamEngine = (() => {
     EXAM_ENDED:     'exam_ended',     // Exam just ended, break before next
     SCHOOL_OVER:    'school_over',    // All exams done for the day
     BEFORE_EXAM:    'before_exam',    // Before first exam of the day
+    STUDY:          'study',          // Self-study period
   };
 
   /**
@@ -38,7 +39,7 @@ const ExamEngine = (() => {
     // Sort by startSec
     const sorted = [...slots].sort((a, b) => a.startSec - b.startSec);
 
-    // Find current exam
+    // Find current exam/study
     for (let i = 0; i < sorted.length; i++) {
       const slot = sorted[i];
       if (nowSec >= slot.startSec && nowSec < slot.endSec) {
@@ -46,6 +47,17 @@ const ExamEngine = (() => {
         const elapsed = nowSec - slot.startSec;
         const totalSec = slot.duration * 60;
         const progress = elapsed / totalSec;
+
+        // Self-study period — simple countdown, no early submit / last 5 min
+        if (slot.isStudy) {
+          return {
+            status: STATUS.STUDY,
+            slot,
+            remainSec,
+            progress,
+            message: formatCountdown(`自習中 — ${slot.label} 剩餘`, remainSec),
+          };
+        }
 
         // Last 5 minutes
         if (remainSec <= 300) {

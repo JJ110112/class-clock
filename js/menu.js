@@ -258,12 +258,12 @@ const MenuModule = (() => {
 
   function createPlacedBlock(slot, period, isMock) {
     const block = document.createElement('div');
-    block.className = 'placed-block';
+    block.className = 'placed-block' + (slot.isStudy ? ' study-block' : '');
     block.draggable = true;
     block.dataset.period = period;
 
-    let content = `${slot.duration}分`;
-    if (isMock && slot.subject) {
+    let content = slot.isStudy ? '自習' : `${slot.duration}分`;
+    if (isMock && slot.subject && !slot.isStudy) {
       content = `${slot.subject} ${slot.duration}分`;
     }
     if (isMock && slot.start) {
@@ -314,9 +314,9 @@ const MenuModule = (() => {
       const settings = ExamData.loadPeriodSettings();
       const period = settings.periods[toPeriod - 1];
 
-      const newSlot = { period: toPeriod, duration: data.duration };
+      const newSlot = { period: toPeriod, duration: data.duration, isStudy: !!data.isStudy };
       if (isMock) {
-        newSlot.subject = '';
+        newSlot.subject = data.isStudy ? '自習' : '';
         newSlot.start = [...period.start];
         newSlot.earlySubmit = 0;
       }
@@ -478,6 +478,7 @@ const MenuModule = (() => {
         e.dataTransfer.setData('text/plain', JSON.stringify({
           type: 'new',
           duration: parseInt(block.dataset.duration),
+          isStudy: block.dataset.study === 'true',
         }));
       });
     });

@@ -346,6 +346,11 @@
   transition: all 0.2s;
 }
 .drag-block:active { cursor: grabbing; opacity: 0.7; }
+.drag-block.study {
+  border-color: var(--green);
+  color: var(--green);
+  background: rgba(0,255,157,0.08);
+}
 
 .schedule-grid {
   display: flex;
@@ -403,6 +408,11 @@
 }
 .grid-slot .placed-block:hover .block-remove { display: flex; }
 .grid-slot .placed-block .block-remove:hover { color: #ff3b3b; }
+.grid-slot .placed-block.study-block {
+  border-color: var(--green);
+  color: var(--green);
+  background: rgba(0,255,157,0.1);
+}
 
 /* Mock subject input */
 .mock-subject-input {

@@ -290,6 +290,71 @@ describe('Multiple schedule management', () => {
   });
 });
 
+describe('Self-study periods', () => {
+  it('monthly exam with study period in between', () => {
+    const settings = ExamData.loadPeriodSettings();
+    const schedule = ExamData.createSchedule({
+      name: '月考含自習',
+      type: 'monthly',
+      dates: ['2026-03-27'],
+      days: [{
+        slots: [
+          { period: 1, duration: 50 },
+          { period: 2, duration: 50, isStudy: true },
+          { period: 3, duration: 80 },
+        ]
+      }],
+      earlySubmit: { 1: 15, 2: 15, 3: 15, 4: 15, 5: 15, 6: 15, 7: 30 },
+    });
+
+    const slots = ExamData.getDaySlots(schedule, 0, settings.periods);
+    expect(slots).toHaveLength(3);
+    expect(slots[0].isStudy).toBe(false);
+    expect(slots[1].isStudy).toBe(true);
+    expect(slots[2].isStudy).toBe(false);
+
+    const schoolEndSec = ExamData.timeToSec(16, 0);
+
+    // Period 1: exam
+    let s = ExamEngine.computeStatus(slots, ExamData.timeToSec(8, 20), schoolEndSec);
+    expect(s.status).toBe(ExamEngine.STATUS.EXAM_ACTIVE);
+
+    // Period 2: study (even with earlySubmit set, should be STUDY)
+    s = ExamEngine.computeStatus(slots, ExamData.timeToSec(9, 20), schoolEndSec);
+    expect(s.status).toBe(ExamEngine.STATUS.STUDY);
+    expect(s.message).toContain('自習中');
+
+    // Period 2: last 3 min — still STUDY, not LAST_5_MIN
+    s = ExamEngine.computeStatus(slots, ExamData.timeToSec(9, 57), schoolEndSec);
+    expect(s.status).toBe(ExamEngine.STATUS.STUDY);
+
+    // Period 3: exam again
+    s = ExamEngine.computeStatus(slots, ExamData.timeToSec(10, 20), schoolEndSec);
+    expect(s.status).toBe(ExamEngine.STATUS.EXAM_ACTIVE);
+  });
+
+  it('mock exam with study slot', () => {
+    const schedule = ExamData.createSchedule({
+      name: '模擬含自習',
+      type: 'mock',
+      dates: ['2026-04-10'],
+      days: [{
+        slots: [
+          { subject: '國文', start: [8, 20], duration: 100, earlySubmit: 0 },
+          { subject: '自習', start: [10, 20], duration: 50, earlySubmit: 0, isStudy: true },
+          { subject: '英文', start: [13, 10], duration: 100, earlySubmit: 0 },
+        ]
+      }],
+    });
+
+    const slots = ExamData.getDaySlots(schedule, 0);
+    expect(slots[1].isStudy).toBe(true);
+
+    let s = ExamEngine.computeStatus(slots, ExamData.timeToSec(10, 30));
+    expect(s.status).toBe(ExamEngine.STATUS.STUDY);
+  });
+});
+
 describe('Edge cases', () => {
   it('exam exactly at boundary (second precision)', () => {
     const slot = {

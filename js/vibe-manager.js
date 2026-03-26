@@ -11,7 +11,7 @@ const VIBES = [
   { name: '星空', file: 'vibe/starry-sky.html',      theme: 'dark',  accent: '#a78bfa', accent2: '#7c3aed', dim: '#9a8aaa', border: '#2a1c3a', bg: '#050510', font: "'Silkscreen', monospace" },
   { name: '像素冒險', file: 'vibe/pixel-game.html', theme: 'light', accent: '#f0a020', accent2: '#e08010', dim: '#5a7090', border: 'rgba(0,0,0,0.15)', bg: '#4a90d9', font: "'Press Start 2P', monospace" },
   { name: '霓虹都市', file: 'vibe/neon-city.html',  theme: 'dark',  accent: '#e040fb', accent2: '#00ffff', dim: '#8a6aaa', border: '#2a1040', bg: '#08060f', font: "'Audiowide', sans-serif" },
-  { name: '夏日海灘', file: 'vibe/summer-beach.html',theme: 'light', accent: '#0099cc', accent2: '#00bcd4', dim: '#5a7585', border: 'rgba(0,0,0,0.1)', bg: '#e8f4f8', font: "'Pacifico', cursive" },
+  { name: '夏日海灘', file: 'vibe/summer-beach.html',theme: 'light', accent: '#ff6b35', accent2: '#e85d26', dim: '#7a6a5a', border: 'rgba(0,0,0,0.1)', bg: '#e8f4f8', font: "'Pacifico', cursive" },
   { name: '平溪天燈', file: 'vibe/sky-lantern.html', theme: 'dark',  accent: '#ff9944', accent2: '#ff6600', dim: '#a08060', border: '#3a2810', bg: '#0a0806', font: "'ZCOOL XiaoWei', serif" },
   { name: '雪梨煙火', file: 'vibe/sydney-fireworks.html', theme: 'dark', accent: '#ff4488', accent2: '#44ddff', dim: '#9090aa', border: '#1a1a30', bg: '#050515', font: "'Righteous', sans-serif" },
   { name: '珊瑚海洋', file: 'vibe/coral-reef.html', theme: 'dark', accent: '#ff7744', accent2: '#22ccaa', dim: '#6a90a0', border: '#0a2a3a', bg: '#031520', font: "'Fredoka', sans-serif" },

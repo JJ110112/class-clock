@@ -79,6 +79,8 @@ const ExamUI = (() => {
       return;
     }
 
+    const disclaimer = document.getElementById('statusDisclaimer');
+
     if (status.status === ExamEngine.STATUS.SCHOOL_OVER) {
       statusText.textContent = '';
       statusCountdown.style.display = 'none';
@@ -86,6 +88,7 @@ const ExamUI = (() => {
       statusInfo.style.fontSize = 'clamp(1.5rem, 6vw, 3rem)';
       statusInfo.style.color = 'var(--accent)';
       statusProgress.style.width = '0%';
+      disclaimer.style.display = 'none';
       return;
     }
     statusInfo.style.fontSize = '';
@@ -97,11 +100,14 @@ const ExamUI = (() => {
       statusCountdown.style.display = 'none';
       statusProgress.style.width = '0%';
       statusInfo.textContent = '';
+      disclaimer.style.display = 'none';
       return;
     }
 
-    // Active exam states — show countdown
+    // Active exam/study states — show countdown + disclaimer
     statusCountdown.style.display = 'inline-flex';
+    disclaimer.style.display = '';
+
     const mm = String(Math.floor(status.remainSec / 60)).padStart(2, '0');
     const ss = String(status.remainSec % 60).padStart(2, '0');
     document.getElementById('scd0').textContent = mm[0];
@@ -127,10 +133,10 @@ const ExamUI = (() => {
         statusText.textContent = `可提早交卷 — ${status.slot.label} 剩餘`;
         break;
       case ExamEngine.STATUS.LAST_5_MIN:
-        statusText.textContent = '交卷倒數';
+        statusText.textContent = '交卷倒數 剩餘';
         break;
       case ExamEngine.STATUS.STUDY:
-        statusText.textContent = `自習中 — ${status.slot.label}`;
+        statusText.textContent = `自習中 — ${status.slot.label} 剩餘`;
         break;
     }
 

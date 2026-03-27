@@ -154,6 +154,27 @@ body {
   padding-bottom: 0.1em;
 }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.15} }
+.colon { animation: none; }
+.colon.blink { animation: blink 1s step-end infinite; }
+
+/* ── Seconds (superscript, absolute so it doesn't shift h:m) ── */
+.digital { position: relative; }
+.sec-wrap {
+  position: absolute;
+  right: clamp(1rem, 5vw, 4rem);
+  top: clamp(0.3rem, 1.5vw, 1rem);
+  display: inline-flex;
+  align-items: flex-start;
+}
+.sec-digit {
+  font-family: var(--font-clock);
+  font-weight: 900;
+  font-size: clamp(0.7rem, 3vw, 2rem);
+  color: var(--accent);
+  text-shadow: var(--glow);
+  line-height: 1;
+}
+
 .weekday { font-size: clamp(0.8rem, 2.5vw, 1.1rem); color: var(--text); letter-spacing: 0.2em; text-shadow: 0 1px 4px rgba(0,0,0,0.3); }
 
 .divider {
@@ -182,6 +203,12 @@ body {
 }
 .container.exam-active .weekday {
   font-size: clamp(0.45rem, 1.2vw, 0.6rem);
+}
+.container.exam-active .sec-digit {
+  font-size: clamp(0.5rem, 2vw, 1.2rem);
+}
+.container.exam-active .sec-wrap {
+  padding-top: clamp(0.1rem, 0.5vw, 0.3rem);
 }
 .container.exam-active .d,
 .container.exam-active .colon,

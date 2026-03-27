@@ -617,3 +617,26 @@
   font-size: 0.78rem;
   color: var(--dim);
 }
+
+.status-countdown-unit {
+  font-family: var(--font-clock);
+  font-size: clamp(0.8rem, 3vw, 1.5rem);
+  color: var(--accent2);
+  text-shadow: var(--glow2);
+  margin-left: 0.2em;
+  align-self: flex-end;
+  padding-bottom: 0.15em;
+}
+.status-bar.urgent .status-countdown-unit {
+  color: #ff3b3b !important;
+  text-shadow: 0 0 20px rgba(255,59,59,0.6) !important;
+}
+
+.status-disclaimer {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: clamp(0.55rem, 1.2vw, 0.7rem);
+  color: var(--dim);
+  opacity: 0.6;
+  text-align: center;
+  letter-spacing: 0.05em;
+}

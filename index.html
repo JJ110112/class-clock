@@ -108,11 +108,12 @@
   <div class="date-line" id="dateLine"></div>
 
   <div class="digital">
-    <span class="d" id="h0">0</span><span class="d" id="h1">0</span>
-    <span class="colon">:</span>
-    <span class="d" id="m0">0</span><span class="d" id="m1">0</span>
-    <span class="colon">:</span>
-    <span class="d" id="s0">0</span><span class="d" id="s1">0</span>
+    <span class="d hour-digit" id="h0"></span><span class="d hour-digit" id="h1">0</span>
+    <span class="colon" id="mainColon">:</span>
+    <span class="d min-digit" id="m0">0</span><span class="d min-digit" id="m1">0</span>
+    <span class="sec-wrap" id="secWrap" style="display:none">
+      <span class="sec-digit" id="s0">0</span><span class="sec-digit" id="s1">0</span>
+    </span>
   </div>
 
   <div class="weekday" id="weekday"></div>
@@ -126,9 +127,11 @@
       <span class="scd" id="scd0">-</span><span class="scd" id="scd1">-</span>
       <span class="scd-colon">:</span>
       <span class="scd" id="scd2">-</span><span class="scd" id="scd3">-</span>
+      <span class="status-countdown-unit">分鐘</span>
     </div>
     <div class="status-progress"><div class="status-progress-bar" id="statusProgressBar" style="width:100%"></div></div>
     <div class="status-info" id="statusInfo"></div>
+    <div class="status-disclaimer" id="statusDisclaimer" style="display:none">注意：本時鐘為輔助，實際考試時間以學校鐘聲為主</div>
   </div>
 
 </div>

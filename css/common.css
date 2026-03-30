@@ -157,14 +157,14 @@ body {
 .colon { animation: none; }
 .colon.blink { animation: blink 1s step-end infinite; }
 
-/* ── Seconds (superscript, absolute so it doesn't shift h:m) ── */
-.digital { position: relative; }
+/* ── Seconds (superscript, zero-width so it doesn't shift h:m) ── */
 .sec-wrap {
-  position: absolute;
-  right: clamp(1rem, 5vw, 4rem);
-  top: clamp(0.3rem, 1.5vw, 1rem);
   display: inline-flex;
   align-items: flex-start;
+  width: 0;
+  overflow: visible;
+  vertical-align: top;
+  margin-top: clamp(0.2rem, 1vw, 0.8rem);
 }
 .sec-digit {
   font-family: var(--font-clock);

@@ -516,6 +516,77 @@ const MenuModule = (() => {
     renderEarlySubmitSettings();
   }
 
+  // ── Export / Import settings ──
+  function exportSettings() {
+    const data = {
+      version: 1,
+      periodSettings: ExamData.loadPeriodSettings(),
+      schedules: ExamData.loadAllSchedules(),
+      activeScheduleId: ExamData.getActiveScheduleId(),
+      muted: ExamData.isMuted(),
+      clock: {
+        is24h: localStorage.getItem('clock_24h') === 'true',
+        showSec: localStorage.getItem('clock_sec') === 'true',
+        colonBlink: localStorage.getItem('clock_blink') === 'true',
+      },
+    };
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'class-clock-settings.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importSettings() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.addEventListener('change', () => {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (!data.version) { alert('無效的設定檔'); return; }
+
+          // Restore period settings
+          if (data.periodSettings) ExamData.savePeriodSettings(data.periodSettings);
+
+          // Restore schedules
+          if (data.schedules) ExamData.saveAllSchedules(data.schedules);
+
+          // Restore active schedule
+          if (data.activeScheduleId) ExamData.setActiveScheduleId(data.activeScheduleId);
+          else ExamData.setActiveScheduleId(null);
+
+          // Restore mute
+          if (data.muted !== undefined) ExamData.setMuted(data.muted);
+
+          // Restore clock preferences
+          if (data.clock) {
+            localStorage.setItem('clock_24h', data.clock.is24h);
+            localStorage.setItem('clock_sec', data.clock.showSec);
+            localStorage.setItem('clock_blink', data.clock.colonBlink);
+          }
+
+          // Refresh UI
+          renderPeriodSettings();
+          renderScheduleList();
+          ExamUI.updateStatus(new Date());
+          alert('設定已匯入，重新整理頁面以套用時鐘設定');
+        } catch (e) {
+          alert('設定檔格式錯誤');
+        }
+      };
+      reader.readAsText(file);
+    });
+    input.click();
+  }
+
   // ── Init ──
   function init() {
     document.getElementById('hamburgerBtn').addEventListener('click', toggle);
@@ -536,6 +607,9 @@ const MenuModule = (() => {
         }));
       });
     });
+
+    document.getElementById('btnExport').addEventListener('click', exportSettings);
+    document.getElementById('btnImport').addEventListener('click', importSettings);
 
     renderPeriodSettings();
     renderScheduleList();

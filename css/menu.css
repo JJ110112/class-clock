@@ -212,6 +212,25 @@
 }
 .btn-new-schedule:hover { border-color: var(--accent); color: var(--accent); }
 
+/* ── Export / Import ── */
+.export-import-row {
+  display: flex;
+  gap: 8px;
+}
+.btn-export, .btn-import {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 0.82rem;
+  transition: all 0.2s;
+}
+.btn-export:hover, .btn-import:hover { border-color: var(--accent); color: var(--accent); }
+
 /* ── Mute toggle ── */
 .mute-row {
   display: flex;

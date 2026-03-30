@@ -1,1 +1,4 @@
 node_modules/
+agent/.env
+agent/.langgraph_api/
+agent/__pycache__/

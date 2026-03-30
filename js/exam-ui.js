@@ -56,7 +56,7 @@ const ExamUI = (() => {
 
     // Check for status change (for audio)
     if (ExamEngine.didStatusChange(prevStatus, status) && !ExamData.isMuted()) {
-      playStatusSound(status.status);
+      AudioModule.play(status.status);
     }
     prevStatus = status;
 
@@ -76,6 +76,9 @@ const ExamUI = (() => {
     if (status.status === ExamEngine.STATUS.IDLE) {
       statusBar.classList.remove('visible');
       document.querySelector('.container').classList.remove('exam-active');
+      prevStatus = null;
+      return;
+    }iner').classList.remove('exam-active');
       return;
     }
 

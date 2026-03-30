@@ -77,7 +77,31 @@ const MenuModule = (() => {
           <span class="sched-checkmark"></span>
         </label>
         <span class="sched-name">${s.name}</span>
-        <span class="sched-type ${s.type}">${s.type === 'monthly' ? '月考' : '模擬'}</span>
+        <span class="sched-type ${s.type}">${s.type === 'monthly' ? '月考' : '模擬考'}</span>
+        <button class="sched-edit" data-id="${s.id}">編輯</button>
+        <button class="sched-delete" data-id="${s.id}">刪除</button>
+      `;
+      
+      // Event listeners
+      const checkbox = item.querySelector('input[type="checkbox"]');
+      checkbox.addEventListener('change', () => {
+        ExamData.setActiveScheduleId(checkbox.checked ? s.id : null);
+        renderScheduleList();
+      });
+      
+      item.querySelector('.sched-edit').addEventListener('click', () => {
+        openEditor(s.id);
+      });
+      
+      item.querySelector('.sched-delete').addEventListener('click', () => {
+        if (confirm(`確定刪除考程「${s.name}」？`)) {
+          ExamData.deleteSchedule(s.id);
+          renderScheduleList();
+        }
+      });
+      
+      list.appendChild(item);
+    });thly' ? '月考' : '模擬'}</span>
         <div class="sched-actions">
           <button class="edit" title="編輯">✎</button>
           <button class="del" title="刪除">✕</button>

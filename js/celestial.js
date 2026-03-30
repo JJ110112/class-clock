@@ -92,6 +92,18 @@ class CelestialBody {
     this._fadeSwapImage();
   }
 
+  /** Fade swap to new image */
+  _fadeSwapImage() {
+    if (this.loaded < CELESTIAL_COUNT) return;
+    
+    this.imgEl.style.opacity = '0';
+    setTimeout(() => {
+      this._updateImage();
+      this.imgEl.style.opacity = '1';
+    }, 200);
+  }ge();
+  }
+
   /**
    * Check if click coordinates hit this celestial body.
    * If hit, cycles image and returns true. Otherwise returns false.

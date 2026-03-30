@@ -79,7 +79,7 @@ def _run_vitest() -> dict:
             capture_output=True,
             text=True,
             timeout=60,
-            shell=True,
+            shell=False,
             encoding="utf-8",
             errors="replace",
         )
@@ -108,7 +108,14 @@ def _run_vitest() -> dict:
         return {
             "passed": passed,
             "failed": failed,
-            "details": "\n".join(fail_details[:20]) if fail_details else "無失敗項目",
+            "details": "\n".join(fail_details[:20]) if fail_details else "",
+            "summary": summary,
+            "success": result.returncode == 0
+        }
+    except subprocess.TimeoutExpired:
+        return {"passed": 0, "failed": 1, "details": "Test timeout", "summary": "", "success": False}
+    except Exception as e:
+        return {"passed": 0, "failed": 1, "details": f"Test error: {str(e)}", "summary": "", "success": False}etails else "無失敗項目",
             "summary": summary,
             "exit_code": result.returncode,
         }

@@ -6,7 +6,21 @@ const AudioModule = (() => {
   let audioCtx = null;
 
   function getCtx() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx) {
+      // Check if user has interacted with the page first
+      if (document.hasStoredUserActivation || document.userActivation?.hasBeenActive) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } else {
+        // Wait for user interaction
+        const createOnInteraction = () => {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          document.removeEventListener('click', createOnInteraction);
+          document.removeEventListener('keydown', createOnInteraction);
+        };
+        document.addEventListener('click', createOnInteraction);
+        document.addEventListener('keydown', createOnInteraction);
+      }
+    }
     return audioCtx;
   }
 

@@ -82,7 +82,22 @@ const ExamData = (() => {
   }
 
   function saveAllSchedules(schedules) {
-    localStorage.setItem(STORAGE_KEY_SCHEDULES, JSON.stringify(schedules));
+    try {
+      const data = JSON.stringify(schedules);
+      // Check if data size exceeds typical localStorage limit (5MB)
+      if (data.length > 4.5 * 1024 * 1024) {
+        throw new Error('Data too large for localStorage');
+      }
+      localStorage.setItem(STORAGE_KEY_SCHEDULES, data);
+    } catch (error) {
+      if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
+        alert('儲存空間已滿，請刪除一些舊的考程排程');
+        throw new Error('LocalStorage quota exceeded');
+      } else {
+        console.error('Failed to save schedules:', error);
+        throw error;
+      }
+    }
   }
 
   function createSchedule(data) {
@@ -104,6 +119,7 @@ const ExamData = (() => {
     const all = loadAllSchedules();
     const idx = all.findIndex(s => s.id === id);
     if (idx === -1) return null;
+    
     Object.assign(all[idx], updates);
     saveAllSchedules(all);
     return all[idx];

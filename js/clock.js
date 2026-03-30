@@ -84,10 +84,11 @@ const ClockModule = {
       document.getElementById('dateLine').textContent =
         `${now.getFullYear()} · ${pad(now.getMonth()+1)} · ${pad(now.getDate())}`;
       document.getElementById('weekday').textContent =
-        `星期${WEEKDAYS[now.getDay()]}  ·  ${DAYS_EN[now.getDay()]}`;
+        `${DAYS_EN[now.getDay()]} · 星期${WEEKDAYS[now.getDay()]}`;
 
       this.onTick.forEach(fn => fn(now));
     };
+
     tick();
     setInterval(tick, 1000);
   }

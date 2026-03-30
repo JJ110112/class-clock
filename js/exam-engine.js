@@ -79,18 +79,18 @@ const ExamEngine = (() => {
               slot,
               remainSec,
               progress,
-              message: formatCountdown(`可提早交卷 — ${slot.label} 剩餘`, remainSec),
+              message: formatCountdown('可提早交卷', remainSec),
             };
           }
         }
 
-        // Active exam
+        // Normal exam in progress
         return {
           status: STATUS.EXAM_ACTIVE,
           slot,
           remainSec,
           progress,
-          message: formatCountdown(`考試中 — ${slot.label} 剩餘`, remainSec),
+          message: formatCountdown(`${slot.label} 進行中`, remainSec),
         };
       }
     }

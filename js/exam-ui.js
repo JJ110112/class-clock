@@ -78,8 +78,6 @@ const ExamUI = (() => {
       document.querySelector('.container').classList.remove('exam-active');
       prevStatus = null;
       return;
-    }iner').classList.remove('exam-active');
-      return;
     }
 
     const disclaimer = document.getElementById('statusDisclaimer');

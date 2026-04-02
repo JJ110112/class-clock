@@ -101,35 +101,6 @@ const MenuModule = (() => {
       });
       
       list.appendChild(item);
-    });thly' ? '月考' : '模擬'}</span>
-        <div class="sched-actions">
-          <button class="edit" title="編輯">✎</button>
-          <button class="del" title="刪除">✕</button>
-        </div>
-      `;
-      // Toggle active on checkbox
-      item.querySelector('.sched-check input').addEventListener('change', (e) => {
-        e.stopPropagation();
-        if (e.target.checked) {
-          ExamData.setActiveScheduleId(s.id);
-        } else {
-          ExamData.setActiveScheduleId(null);
-        }
-        renderScheduleList();
-        ExamUI.updateStatus(new Date());
-      });
-      item.querySelector('.edit').addEventListener('click', (e) => {
-        e.stopPropagation();
-        openEditor(s.id);
-      });
-      item.querySelector('.del').addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (confirm(`確定刪除「${s.name}」？`)) {
-          ExamData.deleteSchedule(s.id);
-          renderScheduleList();
-        }
-      });
-      list.appendChild(item);
     });
   }
 

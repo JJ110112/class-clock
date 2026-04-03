@@ -3,3 +3,4 @@ agent/.env
 agent/.langgraph_api/
 agent/__pycache__/
 .langgraph_api/
+.claude/

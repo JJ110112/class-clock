@@ -101,7 +101,6 @@ class CelestialBody {
       this._updateImage();
       this.imgEl.style.opacity = '1';
     }, 200);
-  }ge();
   }
 
   /**
@@ -131,14 +130,6 @@ class CelestialBody {
       const prefix = this.type === 'sun' ? 'sun' : 'moon';
       this.imgEl.src = `${this.basePath}/${folder}/${prefix}_${String(this.imgIndex).padStart(2, '0')}.png`;
     }
-  }
-
-  _fadeSwapImage() {
-    this.imgEl.style.opacity = '0';
-    setTimeout(() => {
-      this._updateImage();
-      this.imgEl.style.opacity = '1';
-    }, 300);
   }
 
   /** Compute position based on current time */

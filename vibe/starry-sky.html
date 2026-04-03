@@ -306,13 +306,16 @@ window.addEventListener('message', (e) => {
 generateGalaxy();
 createBackgroundStars();
 
-const clock = new THREE.Clock();
+let _lastTime = performance.now(), _elapsed = 0;
 let targetCamX = 0, targetCamY = 3;
 
 function animate() {
   requestAnimationFrame(animate);
-  const dt = clock.getDelta();
-  const elapsed = clock.getElapsedTime();
+  const now = performance.now();
+  const dt = (now - _lastTime) / 1000;
+  _lastTime = now;
+  _elapsed += dt;
+  const elapsed = _elapsed;
 
   smoothWindX *= WIND_DECAY;
   smoothWindY *= WIND_DECAY;
